@@ -9,6 +9,7 @@
 //	$Log$
 //			Biggest_apple 		2023.12.20		Build
 //								2024.1.1		The first test
+//								2024.2.2		Finished all the micocode
 //-----------------------------------------------------------------------------------------------------------
 module	mcs_51(
 	input		clk,
@@ -23,6 +24,7 @@ module	mcs_51(
 	output	reg	psen_n,
 	
 	input	reg	int_n_0,
+	
 	input	reg	int_n_1,
 	
 	output	tx,
@@ -42,13 +44,51 @@ reg			[7:0]		c_mem_rdata;
 reg			[7:0]		i_ram		[0:127];
 reg			[7:0]		e_ram		[0:127];
 							//Opcode
-localparam	[4:0]		MOV_A_RN	=	5'b1110_1,	MOV_RN_A	=	5'b1111_1,				MOV_DIR_RN	=5'b1000_1;
-localparam	[7:0]		MOV_A_DIR	=	8'hE5,MOV_A_F_R0 	=8'hE6,	MOV_A_F_R1 	=8'hE7,		MOV_IMM	 	=8'h74,
-						MOV_RN_IMME	=8'h78,		MOV_DIR_A 	=8'hF5,		MOV_DIR1_DIR2=8'h85,
+localparam	[4:0]		MOV_A_RN	=	5'b1110_1,	MOV_RN_A	=	5'b1111_1,				MOV_DIR_RN	=5'b1000_1,
+						XCH_A_RN	=	5'b1100_1,	ADD_A_RN	=	5'b0010_1,				ADDC_A_RN	=5'b0011_1,
+						SUBB_A_RN	=	5'b1001_1,	INC_RN		=	5'b0000_1,				DEC_RN		=5'b0001_1,
+						ANL_A_RN	=	5'b0101_1,	ORL_A_RN	=	5'b0100_1,				XRL_A_RN	=5'b0110_1,	
+						CJNE_RN_IMM	=	5'b1011_1,	DJNZ_RN		=	5'b1101_1,				MOV_RN_DIR	=5'b1010_1
+						;
+localparam	[4:0]		ACALL		=	5'b10001,	AJMP		=	5'b00001;					
+localparam	[7:0]		MOV_A_DIR	=	8'hE5,MOV_A_F_R0 	=8'hE6,	MOV_A_F_R1 	=8'hE7,		MOV_A_IMM	 	=8'h74,
+						MOV_RN_IMM	=	8'h78,		MOV_DIR_A 	=8'hF5,		MOV_DIR1_DIR2=8'h85,
 						MOV_DIR_F_R0=	8'h86,MOV_DIR_F_R1	=8'h87,	MOV_DIR_IMM	=8'h75,		MOV_F_R0_A 	=8'hF6,
 						MOV_F_R1_A	=	8'hF7,MOV_F_R0_DIR	=8'hA6,	MOV_F_R1_DIR=8'hA7,		MOV_F_R0_IMM=8'h76,
-						MOV_F_R1_IMM=	8'h77,MOV_DPTR_IMM	=8'h90,	MOVC_A_F_DPTRPA	=8'h93,	MOVC_A_F_PCPA=8'h83
+						MOV_F_R1_IMM=	8'h77,MOV_DPTR_IMM	=8'h90,	MOVC_A_F_DPTRPA	=8'h93,	MOVC_A_F_PCPA=8'h83,
+						MOVX_A_F_R0	=8'hE2,MOVX_A_F_R1		=8'hE3,	MOVX_A_F_DPTR	=8'hE0,	MOVX_F_R0_A	=8'hF2,	
+						MOVX_F_R1_A	=8'hF3,MOVX_F_DPTR_A	=8'hF0,	PUSH		=8'hC0,		POP			=8'hD0,
+						XCH_A_DIR	=8'hC5,XCH_A_F_R0		=8'hC6,	XCH_A_F_R1	=8'hC7,		XCHD_A_F_R0	=8'hD6,
+						XCHD_A_F_R1	=8'hD7,SWAP_A			=8'hC4,
 						
+						
+						ADD_A_DIR	=8'h25,ADD_A_F_R0		=8'h26,	ADD_A_F_R1	=8'h27,		ADD_A_IMM	=8'h24,
+						ADDC_A_DIR	=8'h35,ADDC_A_F_R0		=8'h36,	ADDC_A_F_R1	=8'h37,		ADDC_A_IMM	=8'h34,
+						SUBB_A_DIR	=8'h95,SUBB_A_F_R0		=8'h96,	SUBB_A_F_R1	=8'h97,		SUBB_A_IMM	=8'h94,
+						INC_A		=8'h04,INC_DIR			=8'h05,	INC_F_R0	=8'h06,		INC_F_R1	=8'h07,
+						DEC_A		=8'h14,DEC_DIR			=8'h15,	DEC_F_R0	=8'h16,		DEC_F_R1	=8'h17,
+						INC_DPTR	=8'hA3,MUL_AB			=8'hA4,	DIV_AB		=8'h84,		DA_A		=8'hD4,
+						
+						ANL_A_DIR	=8'h55,ANL_A_F_R0		=8'h56,	ANL_A_F_R1	=8'h57,		ANL_A_IMM	=8'h54,
+						ANL_DIR_A	=8'h52,ANL_DIR_IMM		=8'h53,	
+						ORL_A_DIR	=8'h45,ORL_A_F_R0		=8'h46,	ORL_A_F_R1	=8'h47,		ORL_A_IMM	=8'h44,
+						ORL_DIR_A	=8'h42,ORL_DIR_IMM		=8'h43,	
+						XRL_A_DIR	=8'h65,XRL_A_F_R0		=8'h66,	XRL_A_F_R1	=8'h67,		XRL_A_IMM	=8'h64,
+						XRL_DIR_A	=8'h62,XRL_DIR_IMM		=8'h63,	
+						CLR_A		=8'hE4,CPL_A			=8'hF4,	RL_A		=8'h23,		RLC_A		=8'h33,
+						RR_A		=8'h03,RRC_A			=8'h13,
+						
+						LCALL		=8'h12,RET				=8'h22,	RETI		=8'h32,		LJMP		=8'h02,
+						SJMP		=8'h80,JMP				=8'h73,	JZ			=8'h60,		JNZ			=8'h70,
+						CJNE_A_DIR	=8'hB5,CJNE_A_IMM		=8'hB4,	CJNE_F_R0	=8'hB6,		CJNE_F_R1	=8'hB7,
+						DJNZ_RN		=8'hD5,NOP				=8'h00,
+						
+						CLR_C		=8'hC3,CLR_BIT			=8'hC2,	SETB_C		=8'hD3,		SETB_BIT	=8'hD2,
+						CPL_C		=8'hB3,CPL_BIT			=8'hB2,	ANL_C_BIT	=8'h82,		ANL_C_NBIT	=8'hB0,
+						ORL_C_BIT	=8'h72,ORL_C_NBIT		=8'hA0,	MOV_C_BIT	=8'hA2,		MOV_BIT_C	=8'h92,
+						
+						JC			=8'h40,JNC				=8'h50,	JB			=8'h20,		JNB			=8'h30,
+						JBC			=8'h10
 						;
 							//Micro-code register
 
@@ -75,6 +115,7 @@ localparam		S1_0	=4'd0,
 reg		[7:0]	ax_q;
 wire	[7:0]	reg_w_d;
 reg		[7:0]	bx_q;
+reg		[7:0]	sx_q;		//For bit-operation's intermediate variables
 reg		[7:0]	dptrh_q;
 reg		[7:0]	dptrl_q;
 reg		[7:0]	sp_q;
@@ -84,6 +125,8 @@ reg		cy_d;
 reg		pcl_cy;
 reg		ov_q;
 reg		ov_d;
+reg		f0_q;
+							//reg		f0_d;
 
 
 reg		ac_q;
@@ -171,12 +214,13 @@ reg		[2:0]	bit_mode_sel;
 wire	set_or_clr_temp;
 
 
-reg		[7:0]	bx_bit_temp;
+reg		[7:0]	sx_d;		//Shadow register-- >not visible to the user
 reg		cy_set;
 reg		ac_set;
 reg		ov_set;
 reg		zo_set;
 reg		pr_set;
+							//reg		f0_set;
 
 wire	[7:0]	alu_in_0;
 wire	[7:0]	alu_in_1;
@@ -185,7 +229,13 @@ wire			alu_in_cy;
 reg		[2:0]	alu_in_0_mux_sel;
 reg		[3:0]	alu_in_1_mux_sel;
 							//SFR	register	and 	control
-							
+
+wire	is_wPSW;
+wire	is_wAcc;
+wire	is_wB;
+wire	is_wSp;
+wire	is_wdptrh;
+wire	is_wdptrl;
 							//Group 0
 /*
 reg		[7:0]	PSW;
@@ -220,6 +270,43 @@ localparam	[3:0]	SUM			=4'h0,
 					RR			=4'h8,
 					SWAP		=4'h9;
 reg		[7:0]	alu_o;
+							//128 VALID INSTRUCTIONS
+`define IS_VALID_OPCODE(instr_buffer) 																													\
+	(
+		(instr_buffer	== MOV_A_RN	) ||(instr_buffer	==MOV_A_DIR)	||(instr_buffer	==MOV_A_F_R0)	||(instr_buffer	==MOV_A_F_R1)				||	\
+		(instr_buffer	== MOV_A_IMM) ||(instr_buffer	==MOV_RN_A)	||(instr_buffer	==MOV_RN_A)	||(instr_buffer	==MOV_RN_DIR)						||	\
+		(instr_buffer	== MOV_RN_IMM) ||(instr_buffer	==MOV_DIR_A)	||(instr_buffer	==MOV_DIR_RN)	||(instr_buffer	==MOV_DIR1_DIR2)			||	\
+		(instr_buffer	== MOV_DIR_F_R0) ||(instr_buffer	==MOV_DIR_F_R1)	||(instr_buffer	==MOV_DIR_IMM)	||(instr_buffer	==MOV_F_R0_A)			||	\
+		(instr_buffer	== MOV_F_R1_A) ||(instr_buffer	==MOV_F_R0_DIR)	||(instr_buffer	==MOV_F_R1_DIR)	||(instr_buffer	==MOV_F_R0_IMM)				||	\
+		(instr_buffer	== MOV_DPTR_IMM) ||(instr_buffer	==MOVC_A_F_DPTRPA)	||(instr_buffer	==MOVC_A_F_PCPA)	||(instr_buffer	==MOVX_A_F_R0)	||	\
+		(instr_buffer	== MOVX_A_F_R1) ||(instr_buffer	==MOVX_A_F_DPTR)	||(instr_buffer	==MOVX_F_R0_A)	||(instr_buffer	==MOVX_F_R1_A)			||	\
+		
+		(instr_buffer	== MOVX_F_DPTR_A) ||(instr_buffer	==PUSH)	||(instr_buffer	==POP)	||(instr_buffer	==XCHD_A_F_R0)							||	\
+		(instr_buffer	== XCHD_A_F_R1) ||(instr_buffer	==XCH_A_DIR)	||(instr_buffer	==XCH_A_F_R0)	||(instr_buffer	==XCH_A_F_R1)				||	\
+		(instr_buffer	== XCH_A_RN) ||(instr_buffer	==SWAP)	||(instr_buffer	==ADD_A_RN)	||(instr_buffer	==ADD_A_DIR)							||	\
+		
+		(instr_buffer	== ADD_A_F_R0) ||(instr_buffer	==ADD_A_F_R1)	||(instr_buffer	==ADD_A_IMM)	||(instr_buffer	==ADDC_A_DIR)				||	\
+		(instr_buffer	== ADDC_A_F_R0) ||(instr_buffer	==ADDC_A_F_R1)	||(instr_buffer	==ADDC_A_IMM)	||(instr_buffer	==SUBB_A_DIR)				||	\
+		(instr_buffer	== SUBB_A_F_R1) ||(instr_buffer	==SUBB_A_F_R0)	||(instr_buffer	==SUBB_A_IMM)	||(instr_buffer	==INC_A)					||	\
+		
+		(instr_buffer	== INC_DIR) ||(instr_buffer	==INC_F_R0)	||(instr_buffer	==INC_F_R1)	||(instr_buffer	==DEC_A)								||	\
+		(instr_buffer	== DEC_DIR) ||(instr_buffer	==DEC_F_R0)	||(instr_buffer	==DEC_F_R1)	||(instr_buffer	==INC_DPTR)								||	\
+		(instr_buffer	== MUL_AB) ||(instr_buffer	==DIV_AB)	||(instr_buffer	==DA_A)	||(instr_buffer	==ANL_A_DIR)								||	\
+		(instr_buffer	== ANL_A_F_R0) ||(instr_buffer	==ANL_A_F_R1)	||(instr_buffer	==ANL_A_IMM)	||(instr_buffer	==ANL_DIR_A)				||	\
+		(instr_buffer	== ANL_DIR_IMM) ||(instr_buffer	==ORL_A_DIR)	||(instr_buffer	==ORL_A_F_R0)	||(instr_buffer	==ORL_A_F_R1)				||	\
+		
+		(instr_buffer	== ORL_A_IMM) ||(instr_buffer	==ORL_DIR_A)	||(instr_buffer	==ORL_DIR_IMM)	||(instr_buffer	==XRL_A_DIR)				||	\
+		(instr_buffer	== XRL_A_F_R0) ||(instr_buffer	==XRL_A_F_R1)	||(instr_buffer	==XRL_A_IMM)	||(instr_buffer	==XRL_DIR_A)				||	\
+		(instr_buffer	== XRL_DIR_IMM) ||(instr_buffer	==CPL_A)	||(instr_buffer	==RL_A)	||(instr_buffer	==RLC_A)								||	\
+		(instr_buffer	== RR_A) ||(instr_buffer	==RRC_A)	||(instr_buffer	==LCALL)	||(instr_buffer	==RET)									||	\
+		(instr_buffer	== RETI) ||(instr_buffer	==LJMP)	||(instr_buffer	==SJMP)	||(instr_buffer	==JMP)											||	\
+		(instr_buffer	== JZ) ||(instr_buffer	==JNZ)	||(instr_buffer	==CJNE_A_DIR)	||(instr_buffer	==CJNE_A_IMM)								||	\
+		(instr_buffer	== CJNE_F_R0) ||(instr_buffer	==CJNE_F_R1)	||(instr_buffer	==DJNZ_RN)	||(instr_buffer	==NOP)							||	\
+		(instr_buffer	== CLR_C) ||(instr_buffer	==CLR_BIT)	||(instr_buffer	==SETB_C)	||(instr_buffer	==SETB_BIT)								||	\
+		(instr_buffer	== CPL_C) ||(instr_buffer	==CPL_BIT)	||(instr_buffer	==ANL_C_BIT)	||(instr_buffer	==ANL_C_NBIT)						||	\
+		(instr_buffer	== ORL_C_BIT) ||(instr_buffer	==ORL_C_NBIT)	||(instr_buffer	==MOV_C_BIT)	||(instr_buffer	==MOV_BIT_C)				||	\
+		(instr_buffer	== JC) ||(instr_buffer	==JNC)	||(instr_buffer	==JB)	||(instr_buffer	==JNB)												||	\
+		(instr_buffer	== JBC))
 always @(posedge clk)
 	if(!sys_rst_n) begin
 		instr_buffer		<=	8'b0;
@@ -471,7 +558,7 @@ always @*
 reg		c_bit;
 always @(*)
 	begin
-		bx_bit_temp	=bx_q;
+		sx_d	=sx_q;
 		if(!bit_oper_flag)
 			begin
 				cy_set		=1'b0;
@@ -488,7 +575,7 @@ always @(*)
 				ov_set		=1'b0;
 				zo_set		=1'b0;
 				pr_set		=1'b0;
-				bx_bit_temp	=bx_q;
+				sx_d	=sx_q;
 				case(bit_sel)
 					4'h0:	begin
 								cy_set	=	set_or_clr_temp;
@@ -516,8 +603,8 @@ always @(*)
 					4'ha,	
 					4'hb:	
 						begin 
-							bx_bit_temp[bit_sel - 4'd4]	=	set_or_clr_temp;
-							c_bit	=	bx_q[bit_sel - 4'd4];
+							sx_d[bit_sel - 4'd4]	=	set_or_clr_temp;
+							c_bit	=	sx_q[bit_sel - 4'd4];
 						end
 					
 					default:
@@ -531,7 +618,7 @@ assign	set_or_clr_temp	=	(bit_mode_sel == 3'b000) ? set_or_clr:
 							(bit_mode_sel == 3'b001) ?~c_bit:
 							(bit_mode_sel == 3'b010) ?c_bit & cy_q:
 							(bit_mode_sel == 3'b011) ?c_bit | cy_q:
-							(bit_mode_sel == 3'b100) ?bx_q[bit_sel - 4'd4]:
+							(bit_mode_sel == 3'b100) ?sx_q[bit_sel - 4'd4]:
 							(bit_mode_sel == 3'b101) ?cy_q:
 							1'b0;
 							
@@ -539,6 +626,7 @@ always @(posedge clk)
 	if(!sys_rst_n) begin
 		ax_q	<=	8'b0;
 		bx_q	<=	8'b0;
+		sx_q	<=	8'b0;
 	
 		pch_q	<=	8'b0;
 		pcl_q	<=	8'b0;
@@ -548,6 +636,7 @@ always @(posedge clk)
 		ov_q	<=	1'b0;
 		ac_q	<=	1'b0;
 		pr_q	<=	1'b0;
+		f0_q	<=	1'b0;
 		
 		dptrh_q	<=	8'b0;
 		dptrl_q	<=	8'b0;
@@ -573,12 +662,14 @@ always @(posedge clk)
 				dptrl_q	<=	dptrl_q;
 				sp_q	<=	sp_q;
 				bx_q	<=	bx_q;
+				sx_q	<=	sx_q;
 				case(reg_tar_ss)
 						3'd0:	ax_q	<=	reg_w_d;
 						3'd1:	dptrh_q	<=	reg_w_d;
 						3'd2:	dptrl_q	<=	reg_w_d;
 						3'd3:	sp_q	<=	reg_w_d;
 						3'd4:	bx_q	<=	reg_w_d;
+						3'd5:	sx_q	<=	reg_w_d;
 					default:
 						begin
 						end
@@ -590,6 +681,8 @@ always @(posedge clk)
 				dptrh_q	<=	dptrh_q;
 				dptrl_q	<=	dptrl_q;
 				sp_q	<=	sp_q;
+				bx_q	<=	bx_q;
+				sx_q	<=	sx_q;
 			end
 							//Only in P4S1 phase the acc register will update
 		pcl_cy	<=	1'b0;
@@ -633,6 +726,16 @@ always @(posedge clk)
 			ac_q	<=	ac_q;
 			pr_q	<=	pr_q;
 		end
+		/*
+			Directly addressing can change the value of SFR(Acc,PSW,B) too		......
+		*/
+		ac_q	<=	(is_wAcc) 	?	mem_wdata:ac_q;
+		bx_q	<=	(is_wB)		?	mem_wdata:bx_q;
+		sp_q	<=	(is_wSp)	?	mem_wdata:sp_q;
+		dptrh_q	<=	(is_wdptrh)	?	mem_wdata:dptrh_q;
+		dptrl_q	<=	(is_wdptrl)	?	mem_wdata:dptrl_q;
+		{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,1'b0,pr_q}
+				<=	(is_wPSW)	?	mem_wdata:{cy_q,ac_q,f0,rs1_q,rs0_q,ov_q,1'b0,pr_q};
 	end
 
 wire	[7:0]		ax_q_ss_01;
@@ -667,7 +770,7 @@ assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer:
 							//Not change 
 								(reg_w_mux_ss ==3'b100)	? 	ax_q:
 								(reg_w_mux_ss ==3'b101) ?	bx_q:
-								(reg_w_mux_ss ==3'b110) ?	bx_bit_temp:
+								(reg_w_mux_ss ==3'b110) ?	sx_d:
 								8'b0;
 assign		mem_wdata_ss	=	(mem_wdata_mux_sel	==4'h0) ?	ax_q:
 								(mem_wdata_mux_sel  ==4'h0) ?	s2_data_buffer:
@@ -675,6 +778,7 @@ assign		mem_wdata_ss	=	(mem_wdata_mux_sel	==4'h0) ?	ax_q:
 								(mem_wdata_mux_sel	==4'h2) ?	pch_q:
 								(mem_wdata_mux_sel	==4'h3) ?	pcl_q:
 								(mem_wdata_mux_sel	==4'h4) ?	bx_q:
+								(mem_wdata_mux_sel	==4'h5)	?	sx_q:
 																8'b0
 								;
 assign		r0_w			=	{7'b0,rs1_q,rs0_q,7'b0};
@@ -727,6 +831,8 @@ always @(*)
 				mem_addr_d	=	(s3_mem_addr_sel == 3'b000) ? {8'b0,s2_data_buffer}:
 								(s3_mem_addr_sel == 3'b001) ? {8'b0,sp_q}:
 								(s3_mem_addr_sel == 3'b010) ? {8'b0,s3_data_buffer}:
+								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer[7:3],3'b0}:
+								(s3_mem_addr_sel == 3'b100) ? {8'b0,s2_data_buffer[7:3],3'b0}
 								{pch_q,pcl_q}
 								;
 							//MOV A,direct
@@ -749,7 +855,9 @@ always @(*)
 								(s6_mem_addr_sel == 4'hd) ?s2_data_buffer[7:3] + 16'h20:
 								(s6_mem_addr_sel == 4'he) ?{pch_q,pcl_q}:
 							//For bit operation
-								16'd0;
+							
+								{8'b0,s2_data_buffer[7:3],3'b0};
+							//For SFR bit operation
 			default:
 				mem_addr_d	=	mem_addr_q;
 				
@@ -766,7 +874,7 @@ The content of mc_b:
 	[6:3]						This is called the S2 memory address sel which decides where the address comes from 
 	7							If fetch data from S3, this bit will decide where the data comes from ROM or RAM,if fetch the data from ROM the PC value will add one automatically
 	[10:8]						This is called the S3 memory address sel which decides where the address comes from 
-	11							This bit indicates whether the instruction needs double cycle
+	11							This bit -indicates whether the instruction needs double cycle
 	[14:12]						Target register sel bits that decides which register such as ax,bx and etc will be written new byte in S4 and S5
 	[17:15]						These bits decide where the byte come from .."reg_w_mux_ss"
 	[21:18]						These bits decide where the mem_wdata's address comes from "s6_mem_addr_sel"
@@ -786,27 +894,63 @@ The content of mc_b:
 	
 	[31:28]						These bits decide which register to carry bit operation		"bit_sel"
 	34							This bit clears or sets the specific bit		"set_or_clr"								
-	[40:38]						These bits decide which bit operation to carry	on "bit_mode_sel"
+	[40:37]						These bits decide which bit operation to carry	on "bit_mode_sel"
 	
 	[42:41]						[is_jump,is_call]	for sub-routine and interrupt service
 	43							This bit will decide whether write data to ram
 							*/
+wire		p_ssr		=	(!we_n &&psen_n);	
+wire		is_PSW		=	(mem_addr[7:3]	==5'b1101_0)	;
+wire		is_Acc		=	(mem_addr[7:3]	==5'b1110_0)	;
+wire		is_B		=	(mem_addr[7:3]	==5'b1111_0)	;
+wire		is_SP		=	(mem_addr[7:3]	==5'b1000_1)	;
+wire		is_dptrh	=	(mem_addr[7:0]	==8'h83			;
+							//This is because the architecture of this "mc51" is not quite compatible to the original one	:)
+wire		is_dptrl	=	(mem_addr[7:0]	==8'h82		)	;
+wire		is_SCON		=	(mem_addr[7:3]	==5'b1001_1)	;
+wire		is_P1		=	(mem_addr[7:3]	==5'b1001_0)	;
+wire		is_TCON		=	(mem_addr[7:3]	==5'b1000_1)	;
+wire		is_P0		=	(mem_addr[7:3]	==5'b1000_0)	;
+wire		is_bitE_SFR	=	is_Acc |is_B|is_PSW|is_SP|is_SCON|is_P1|is_TCON|is_P0;
+							//This wire stand for the operation of SFR which aims to distinguish the normal bit operation from sfr bit operation	
+
+assign		is_wAcc	=	p_ssr	&	is_Acc;
+assign		is_wB	=	p_ssr	&	is_B;
+assign		is_wSp	=	p_ssr	&	is_SP;
+assign		is_wdptrh	=p_ssr	&	is_dptrh;
+assign		is_wdptrl	=p_ssr	&	is_dptrl;
+assign		is_wPSW		=p_ssr	&	is_PSW;
+/*
+							//Memory mapping circuit,even for SFR
+always @(*) begin
+	is_wAcc	=1'b0;
+	is_wPSW	=1'b0;
+	is_wB	=1'b0;
+	is_wSp	=1'b0;
+	if(!we_n &&psen_n)
+		begin
+			is_wAcc	=	(mem_addr[]	==	{8'h00,4'he});
+			is_wPSW	=	(mem_addr[]	==	{8'h00,4'});
+			is_wB	=	(mem_addr[]	==	{8'h00,});
+			
+		end
+end
+*/
 always @(*)
-	begin
-		if(instr_buffer[7:3] == MOV_A_RN)
-			mc_b	=	44'b0000_0000_0000_0000_0000_0000_0000_0000_00000_0000_101;
-		/*
-		else if()
-			case
-				
-			endcase
-		*/
-		else
-			mc_b	=	44'b0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000;
-	end
-							//Decoder unit
+	casez(instr_buffer)
+		{MOV_A_RN,3'bz}:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer[2:0]},1'b1,1'b0,1'b1};
+		MOV_A_DIR:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'hc,1'b0,1'b1,1'b1};
+		MOV_A_F_R0	=	{};
+		
+		
+		default:
+			mc_b	=	44'h0;
+	endcase
+							//Decoder unit (CU)
 always @(*)
-	begin
+	begincc
 	s3_mem_addr_sel			=		3'h0;
 	s2_mem_addr_sel			=		4'h0;
 	s6_mem_addr_sel			=		4'he;
@@ -843,7 +987,10 @@ always @(*)
 			This bit is decoded by the following circuit
 		*/
 	
-		bit_oper_flag			=	(instr_buffer	==)?		1'b1:	1'b0;
+		bit_oper_flag			=	(instr_buffer	==MOV_C_BIT|instr_buffer ==MOV_BIT_C|instr_buffer == CLR_C|instr_buffer ==CLR_BIT|
+									instr_buffer	==SETB_C |instr_buffer ==SETB_BIT |instr_buffer ==ANL_C_BIT| instr_buffer ==ANL_C_NBIT |
+									instr_buffer	==ORL_C_BIT | instr_buffer ==ORL_C_NBIT |instr_buffer ==CPL_BIT |instr_buffer ==CPL_C)?		
+									1'b1:	1'b0;
 		if(t_p_q == S1_0 || t_p_q ==S1_1) begin
 				{is_s3_fetch,is_s2_fetch}	=	{mc_b[1],mc_b[0]};
 				alu_mode_sel	=	SUM;
@@ -867,16 +1014,7 @@ always @(*)
 		
 		else if
 		*/
-	end
-							//SFR	decoder circuit	not yet...	:)
-always @(*)
-	begin
-		
-	
-	
-	end
-						
-							//Memory mapping circuit
+	end		
 integer			index;
 always @(posedge clk)
 	if(!sys_rst_n)
@@ -898,7 +1036,7 @@ always @(posedge clk)
 				end
 		end
 	else begin
-		if		(!we_n)
+		if		(!we_n && psen_n)
 			begin
 				if(mem_addr[15:8] == 8'b0)
 					begin
@@ -934,11 +1072,11 @@ always @(posedge clk)
 		end
 
 always @(*)
-	if(~rd_n)
+	if(~rd_n && psen_n)
 		begin
 			if(mem_addr[15:8] == 8'b0)
 				if(mem_addr[7]) 
-					case(mem_addr)
+					casez(mem_addr)
 						8'hB8:
 							c_mem_rdata	=	IP;
 						8'hB0:
@@ -955,6 +1093,10 @@ always @(*)
 							c_mem_rdata	=	TCON;
 						8'h80:
 							c_mem_rdata	=	P0_r;
+						8'h:
+							c_mem_rdata	=	{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,1'b0,pr_q};
+						
+						
 						default:
 							c_mem_rdata	=	8'b0;
 						//If we read the undefined-SFR,then the cpu will return zero

@@ -1,0 +1,8 @@
+E:/C51_on_FPGA/tb/mc51_btb.v {1 {vlog -work work -vopt E:/C51_on_FPGA/tb/mc51_btb.v
+Model Technology ModelSim SE vlog 10.1c Compiler 2012.07 Jul 27 2012
+-- Compiling module mc51_tb
+
+Top level modules:
+	mc51_tb
+
+} {} {}}
