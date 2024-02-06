@@ -161,11 +161,11 @@ wire	[7:0]	r7_w;
 
 							//Micro-code statue flag
 
-reg		[7:0]	instr_buffer;
-reg		[7:0]	s2_data_buffer;
+reg		[7:0]	instr_buffer_q;
+reg		[7:0]	s2_data_buffer_q;
 reg		[7:0]	instr_buffer_d;
 reg		[7:0]	s2_data_buffer_d;
-reg		[7:0]	s3_data_buffer;
+reg		[7:0]	s3_data_buffer_q;
 reg		[7:0]	s3_data_buffer_d;
 
 reg		is_two_word;
@@ -174,21 +174,30 @@ reg		is_three_word;
 wire	is_three_word_d;
 
 reg		is_double_cycle;
-reg		dc_exc_flag;
-wire	dc_exc_flag_d;
+reg		is_double_cycle_exc_q;
+wire	is_double_cycle_exc_d;
 							//Microcode rom unit
 reg		[43:0]		mc_b;	
 							//Internal Wire connection
-
-wire	is_interrupt_cycle;
 reg		is_base_pch;
 reg		is_base_pcl;
 reg		is_jump;
 reg		is_call;
 reg		is_jump_en;
+							//Interrupt related Wire
+wire	[7:0]		mc51_int_n;
+wire	is_interrupt_cycle		=	1'b0;
+reg		is_interrupt_ocpt;
 wire	intr_excu_done;
-wire	[2:0]	intr_code;
-wire			intr_flag;
+wire	intr_flag;
+localparam		INT_VECTOR_0	=	16'h0003,
+				INT_VECTOR_1	=	16'h000b,
+				INT_VECTOR_3	=	16'h0013,
+				INT_VECTOR_4	=	16'h001b,
+				INT_VECTOR_5	=	16'h0023,
+				INT_VECTOR_6	=	16'h002b,
+				INT_VECTOR_7	=	16'h0033;	
+
 reg		s2_rd_ram_nprg;
 reg		s3_rd_ram_nprg;
 reg		is_s2_fetch;
@@ -271,56 +280,56 @@ localparam	[3:0]	SUM			=4'h0,
 					SWAP		=4'h9;
 reg		[7:0]	alu_o;
 							//128 VALID INSTRUCTIONS
-`define IS_VALID_OPCODE(instr_buffer) 																													\
+`define IS_VALID_OPCODE(instr_buffer_q) 																															\
 	(
-		(instr_buffer	== MOV_A_RN	) ||(instr_buffer	==MOV_A_DIR)	||(instr_buffer	==MOV_A_F_R0)	||(instr_buffer	==MOV_A_F_R1)				||	\
-		(instr_buffer	== MOV_A_IMM) ||(instr_buffer	==MOV_RN_A)	||(instr_buffer	==MOV_RN_A)	||(instr_buffer	==MOV_RN_DIR)						||	\
-		(instr_buffer	== MOV_RN_IMM) ||(instr_buffer	==MOV_DIR_A)	||(instr_buffer	==MOV_DIR_RN)	||(instr_buffer	==MOV_DIR1_DIR2)			||	\
-		(instr_buffer	== MOV_DIR_F_R0) ||(instr_buffer	==MOV_DIR_F_R1)	||(instr_buffer	==MOV_DIR_IMM)	||(instr_buffer	==MOV_F_R0_A)			||	\
-		(instr_buffer	== MOV_F_R1_A) ||(instr_buffer	==MOV_F_R0_DIR)	||(instr_buffer	==MOV_F_R1_DIR)	||(instr_buffer	==MOV_F_R0_IMM)				||	\
-		(instr_buffer	== MOV_DPTR_IMM) ||(instr_buffer	==MOVC_A_F_DPTRPA)	||(instr_buffer	==MOVC_A_F_PCPA)	||(instr_buffer	==MOVX_A_F_R0)	||	\
-		(instr_buffer	== MOVX_A_F_R1) ||(instr_buffer	==MOVX_A_F_DPTR)	||(instr_buffer	==MOVX_F_R0_A)	||(instr_buffer	==MOVX_F_R1_A)			||	\
+		(instr_buffer_q	== MOV_A_RN	) ||(instr_buffer_q	==MOV_A_DIR)	||(instr_buffer_q	==MOV_A_F_R0)	||(instr_buffer_q	==MOV_A_F_R1)					||	\
+		(instr_buffer_q	== MOV_A_IMM) ||(instr_buffer_q	==MOV_RN_A)	||(instr_buffer_q	==MOV_RN_A)	||(instr_buffer_q	==MOV_RN_DIR)							||	\
+		(instr_buffer_q	== MOV_RN_IMM) ||(instr_buffer_q	==MOV_DIR_A)	||(instr_buffer_q	==MOV_DIR_RN)	||(instr_buffer_q	==MOV_DIR1_DIR2)			||	\
+		(instr_buffer_q	== MOV_DIR_F_R0) ||(instr_buffer_q	==MOV_DIR_F_R1)	||(instr_buffer_q	==MOV_DIR_IMM)	||(instr_buffer_q	==MOV_F_R0_A)				||	\
+		(instr_buffer_q	== MOV_F_R1_A) ||(instr_buffer_q	==MOV_F_R0_DIR)	||(instr_buffer_q	==MOV_F_R1_DIR)	||(instr_buffer_q	==MOV_F_R0_IMM)				||	\
+		(instr_buffer_q	== MOV_DPTR_IMM) ||(instr_buffer_q	==MOVC_A_F_DPTRPA)	||(instr_buffer_q	==MOVC_A_F_PCPA)	||(instr_buffer_q	==MOVX_A_F_R0)		||	\
+		(instr_buffer_q	== MOVX_A_F_R1) ||(instr_buffer_q	==MOVX_A_F_DPTR)	||(instr_buffer_q	==MOVX_F_R0_A)	||(instr_buffer_q	==MOVX_F_R1_A)			||	\
 		
-		(instr_buffer	== MOVX_F_DPTR_A) ||(instr_buffer	==PUSH)	||(instr_buffer	==POP)	||(instr_buffer	==XCHD_A_F_R0)							||	\
-		(instr_buffer	== XCHD_A_F_R1) ||(instr_buffer	==XCH_A_DIR)	||(instr_buffer	==XCH_A_F_R0)	||(instr_buffer	==XCH_A_F_R1)				||	\
-		(instr_buffer	== XCH_A_RN) ||(instr_buffer	==SWAP)	||(instr_buffer	==ADD_A_RN)	||(instr_buffer	==ADD_A_DIR)							||	\
+		(instr_buffer_q	== MOVX_F_DPTR_A) ||(instr_buffer_q	==PUSH)	||(instr_buffer_q	==POP)	||(instr_buffer_q	==XCHD_A_F_R0)								||	\
+		(instr_buffer_q	== XCHD_A_F_R1) ||(instr_buffer_q	==XCH_A_DIR)	||(instr_buffer_q	==XCH_A_F_R0)	||(instr_buffer_q	==XCH_A_F_R1)				||	\
+		(instr_buffer_q	== XCH_A_RN) ||(instr_buffer_q	==SWAP)	||(instr_buffer_q	==ADD_A_RN)	||(instr_buffer_q	==ADD_A_DIR)								||	\
 		
-		(instr_buffer	== ADD_A_F_R0) ||(instr_buffer	==ADD_A_F_R1)	||(instr_buffer	==ADD_A_IMM)	||(instr_buffer	==ADDC_A_DIR)				||	\
-		(instr_buffer	== ADDC_A_F_R0) ||(instr_buffer	==ADDC_A_F_R1)	||(instr_buffer	==ADDC_A_IMM)	||(instr_buffer	==SUBB_A_DIR)				||	\
-		(instr_buffer	== SUBB_A_F_R1) ||(instr_buffer	==SUBB_A_F_R0)	||(instr_buffer	==SUBB_A_IMM)	||(instr_buffer	==INC_A)					||	\
+		(instr_buffer_q	== ADD_A_F_R0) ||(instr_buffer_q	==ADD_A_F_R1)	||(instr_buffer_q	==ADD_A_IMM)	||(instr_buffer_q	==ADDC_A_DIR)				||	\
+		(instr_buffer_q	== ADDC_A_F_R0) ||(instr_buffer_q	==ADDC_A_F_R1)	||(instr_buffer_q	==ADDC_A_IMM)	||(instr_buffer_q	==SUBB_A_DIR)				||	\
+		(instr_buffer_q	== SUBB_A_F_R1) ||(instr_buffer_q	==SUBB_A_F_R0)	||(instr_buffer_q	==SUBB_A_IMM)	||(instr_buffer_q	==INC_A)					||	\
 		
-		(instr_buffer	== INC_DIR) ||(instr_buffer	==INC_F_R0)	||(instr_buffer	==INC_F_R1)	||(instr_buffer	==DEC_A)								||	\
-		(instr_buffer	== DEC_DIR) ||(instr_buffer	==DEC_F_R0)	||(instr_buffer	==DEC_F_R1)	||(instr_buffer	==INC_DPTR)								||	\
-		(instr_buffer	== MUL_AB) ||(instr_buffer	==DIV_AB)	||(instr_buffer	==DA_A)	||(instr_buffer	==ANL_A_DIR)								||	\
-		(instr_buffer	== ANL_A_F_R0) ||(instr_buffer	==ANL_A_F_R1)	||(instr_buffer	==ANL_A_IMM)	||(instr_buffer	==ANL_DIR_A)				||	\
-		(instr_buffer	== ANL_DIR_IMM) ||(instr_buffer	==ORL_A_DIR)	||(instr_buffer	==ORL_A_F_R0)	||(instr_buffer	==ORL_A_F_R1)				||	\
+		(instr_buffer_q	== INC_DIR) ||(instr_buffer_q	==INC_F_R0)	||(instr_buffer_q	==INC_F_R1)	||(instr_buffer_q	==DEC_A)								||	\
+		(instr_buffer_q	== DEC_DIR) ||(instr_buffer_q	==DEC_F_R0)	||(instr_buffer_q	==DEC_F_R1)	||(instr_buffer_q	==INC_DPTR)								||	\
+		(instr_buffer_q	== MUL_AB) ||(instr_buffer_q	==DIV_AB)	||(instr_buffer_q	==DA_A)	||(instr_buffer_q	==ANL_A_DIR)								||	\
+		(instr_buffer_q	== ANL_A_F_R0) ||(instr_buffer_q	==ANL_A_F_R1)	||(instr_buffer_q	==ANL_A_IMM)	||(instr_buffer_q	==ANL_DIR_A)				||	\
+		(instr_buffer_q	== ANL_DIR_IMM) ||(instr_buffer_q	==ORL_A_DIR)	||(instr_buffer_q	==ORL_A_F_R0)	||(instr_buffer_q	==ORL_A_F_R1)				||	\
 		
-		(instr_buffer	== ORL_A_IMM) ||(instr_buffer	==ORL_DIR_A)	||(instr_buffer	==ORL_DIR_IMM)	||(instr_buffer	==XRL_A_DIR)				||	\
-		(instr_buffer	== XRL_A_F_R0) ||(instr_buffer	==XRL_A_F_R1)	||(instr_buffer	==XRL_A_IMM)	||(instr_buffer	==XRL_DIR_A)				||	\
-		(instr_buffer	== XRL_DIR_IMM) ||(instr_buffer	==CPL_A)	||(instr_buffer	==RL_A)	||(instr_buffer	==RLC_A)								||	\
-		(instr_buffer	== RR_A) ||(instr_buffer	==RRC_A)	||(instr_buffer	==LCALL)	||(instr_buffer	==RET)									||	\
-		(instr_buffer	== RETI) ||(instr_buffer	==LJMP)	||(instr_buffer	==SJMP)	||(instr_buffer	==JMP)											||	\
-		(instr_buffer	== JZ) ||(instr_buffer	==JNZ)	||(instr_buffer	==CJNE_A_DIR)	||(instr_buffer	==CJNE_A_IMM)								||	\
-		(instr_buffer	== CJNE_F_R0) ||(instr_buffer	==CJNE_F_R1)	||(instr_buffer	==DJNZ_RN)	||(instr_buffer	==NOP)							||	\
-		(instr_buffer	== CLR_C) ||(instr_buffer	==CLR_BIT)	||(instr_buffer	==SETB_C)	||(instr_buffer	==SETB_BIT)								||	\
-		(instr_buffer	== CPL_C) ||(instr_buffer	==CPL_BIT)	||(instr_buffer	==ANL_C_BIT)	||(instr_buffer	==ANL_C_NBIT)						||	\
-		(instr_buffer	== ORL_C_BIT) ||(instr_buffer	==ORL_C_NBIT)	||(instr_buffer	==MOV_C_BIT)	||(instr_buffer	==MOV_BIT_C)				||	\
-		(instr_buffer	== JC) ||(instr_buffer	==JNC)	||(instr_buffer	==JB)	||(instr_buffer	==JNB)												||	\
-		(instr_buffer	== JBC))
+		(instr_buffer_q	== ORL_A_IMM) ||(instr_buffer_q	==ORL_DIR_A)	||(instr_buffer_q	==ORL_DIR_IMM)	||(instr_buffer_q	==XRL_A_DIR)					||	\
+		(instr_buffer_q	== XRL_A_F_R0) ||(instr_buffer_q	==XRL_A_F_R1)	||(instr_buffer_q	==XRL_A_IMM)	||(instr_buffer_q	==XRL_DIR_A)				||	\
+		(instr_buffer_q	== XRL_DIR_IMM) ||(instr_buffer_q	==CPL_A)	||(instr_buffer_q	==RL_A)	||(instr_buffer_q	==RLC_A)								||	\
+		(instr_buffer_q	== RR_A) ||(instr_buffer_q	==RRC_A)	||(instr_buffer_q	==LCALL)	||(instr_buffer_q	==RET)										||	\
+		(instr_buffer_q	== RETI) ||(instr_buffer_q	==LJMP)	||(instr_buffer_q	==SJMP)	||(instr_buffer_q	==JMP)												||	\
+		(instr_buffer_q	== JZ) ||(instr_buffer_q	==JNZ)	||(instr_buffer_q	==CJNE_A_DIR)	||(instr_buffer_q	==CJNE_A_IMM)								||	\
+		(instr_buffer_q	== CJNE_F_R0) ||(instr_buffer_q	==CJNE_F_R1)	||(instr_buffer_q	==DJNZ_RN)	||(instr_buffer_q	==NOP)								||	\
+		(instr_buffer_q	== CLR_C) ||(instr_buffer_q	==CLR_BIT)	||(instr_buffer_q	==SETB_C)	||(instr_buffer_q	==SETB_BIT)									||	\
+		(instr_buffer_q	== CPL_C) ||(instr_buffer_q	==CPL_BIT)	||(instr_buffer_q	==ANL_C_BIT)	||(instr_buffer_q	==ANL_C_NBIT)							||	\
+		(instr_buffer_q	== ORL_C_BIT) ||(instr_buffer_q	==ORL_C_NBIT)	||(instr_buffer_q	==MOV_C_BIT)	||(instr_buffer_q	==MOV_BIT_C)					||	\
+		(instr_buffer_q	== JC) ||(instr_buffer_q	==JNC)	||(instr_buffer_q	==JB)	||(instr_buffer_q	==JNB)												||	\
+		(instr_buffer_q	== JBC))
 always @(posedge clk)
 	if(!sys_rst_n) begin
-		instr_buffer		<=	8'b0;
-		s2_data_buffer		<=	8'b0;
-		s3_data_buffer		<=	8'b0;
+		instr_buffer_q		<=	8'b0;
+		s2_data_buffer_q		<=	8'b0;
+		s3_data_buffer_q		<=	8'b0;
 
 		t_p_q				<=	S1_0;
 		mem_wdata			<=	8'b0;
 	end
 	else begin
-		t_p_q			<=t_p_d;
-		instr_buffer	<=instr_buffer_d;
-		s2_data_buffer	<=s2_data_buffer_d;
-		s3_data_buffer	<=s3_data_buffer_d;
+		t_p_q				<=t_p_d;
+		instr_buffer_q		<=instr_buffer_d;
+		s2_data_buffer_q	<=s2_data_buffer_d;
+		s3_data_buffer_q	<=s3_data_buffer_d;
 		
 		mem_wdata		<=(t_p_q == S6_1) ? mem_wdata_ss: mem_wdata;
 	end
@@ -332,9 +341,9 @@ always @(*) begin
 	pch_d	=	pch_q;
 	pcl_d	=	pcl_q;
 	
-	instr_buffer_d	=	instr_buffer;
-	s2_data_buffer_d	=	s2_data_buffer;
-	s3_data_buffer_d	=	s3_data_buffer;
+	instr_buffer_d	=	instr_buffer_q;
+	s2_data_buffer_d	=	s2_data_buffer_q;
+	s3_data_buffer_d	=	s3_data_buffer_q;
 	case(t_p_q)
 		S1_0:				// Beside getting the current instruction 
 							// in s1 ~s2 phase,we should generate the next PC value
@@ -342,10 +351,7 @@ always @(*) begin
 				if(is_interrupt_cycle)
 					t_p_d	=	S4_0;
 				else begin
-					if(dc_exc_flag)
-						t_p_d	=	S4_0;
-					else
-						t_p_d	=	(ready_in) ? S1_1:S1_0;
+					t_p_d	=	(ready_in) ? S1_1:S1_0;
 				
 					psen_n	=	1'b0;
 					pcl_d	=	alu_o;
@@ -460,6 +466,10 @@ always @(*) begin
 				t_p_d	=	(ready_in) ? S1_0:S8_1;
 				we_n	=	1'b0;
 			end
+			else if(is_double_cycle_exc_q)					
+										//If the instruction needs two cycles?
+				t_p_d	=	S4_0;
+				
 			else
 				t_p_d	=	S7_0;
 										//The following phase for interrupt operation
@@ -477,7 +487,9 @@ always @(*) begin
 			end
 		S7_1:
 			t_p_d	=	S8_0;
-		S8_0:
+		S8_0:							//The S8 phase is called "the end phase",when an instruction 
+										// execution has completely done, then the cpu will turn to 
+										//S8 phase.In S8 phase, we can get to work on interrupt operaton
 			t_p_d	=	S8_1;
 		S8_1:
 										//Whether the t_p_q jumps to S1_0 phase,is decided by 
@@ -520,7 +532,7 @@ reg		alu_cy_l_w;
 reg		[2:0]	alu_o_c6;
 reg		alu_cy_c6_w;
 reg		alu_o_c7;
-always @*
+always @(*)
 	begin
 		cy_d 	= 1'b0;
 		ov_d 	= 1'b0;
@@ -645,7 +657,7 @@ always @(posedge clk)
 		sp_q	<=	8'b0;
 		
 		mem_addr_q	<=	16'b0;
-		dc_exc_flag	<=	1'b0;
+		is_double_cycle_exc_q	<=	1'b0;
 		
 		rs0_q	<=	1'b0;
 		rs1_q	<=	1'b0;
@@ -683,11 +695,9 @@ always @(posedge clk)
 				sp_q	<=	sp_q;
 				bx_q	<=	bx_q;
 				sx_q	<=	sx_q;
-			end
-							//Only in P4S1 phase the acc register will update
+			end	
 		pcl_cy	<=	1'b0;
-		
-		dc_exc_flag	<=	dc_exc_flag_d;
+		is_double_cycle_exc_q	<=	is_double_cycle_exc_d;
 		
 		if(		t_p_q ==S1_0	||t_p_q ==S1_1 || ((t_p_q ==S2_0 || t_p_q ==S2_1) && mc_b[2])
 								|| ((t_p_q ==S3_0 || t_p_q == S3_1) &&
@@ -740,11 +750,11 @@ always @(posedge clk)
 
 wire	[7:0]		ax_q_ss_01;
 assign	ax_q_ss_01	=(ax_comp_o) ?~ax_q +8'd1:ax_q;
-assign	dc_exc_flag_d	=	(t_p_q == S1_1 && is_double_cycle && ~dc_exc_flag) ? 1'b1:
-							(t_p_q	==	S1_0 && dc_exc_flag)? 1'b0:
-							dc_exc_flag;
+assign	is_double_cycle_exc_d	=	(t_p_q == S1_1 && is_double_cycle && ~is_double_cycle_exc_q) ? 1'b1:
+							(t_p_q	==	S4_0 && is_double_cycle_exc_q)? 1'b0:
+							is_double_cycle_exc_q;
 assign		alu_in_0	=	(alu_in_0_mux_sel == 3'b000) ?ax_q_ss_01:
-							(alu_in_0_mux_sel == 3'b001) ?s2_data_buffer:
+							(alu_in_0_mux_sel == 3'b001) ?s2_data_buffer_q:
 							(alu_in_0_mux_sel == 3'b010) ?8'd1:
 							(alu_in_0_mux_sel == 3'b011) ?8'b1111_1111:
 							//Neg One..
@@ -753,8 +763,8 @@ assign		alu_in_1	=	(alu_in_1_mux_sel ==4'b0000) ?pcl_q:
 							(alu_in_1_mux_sel ==4'b0001) ?pch_q:
 							(alu_in_1_mux_sel ==4'b0010) ?dptrl_q:
 							(alu_in_1_mux_sel ==4'b0011) ?dptrh_q:
-							(alu_in_1_mux_sel ==4'b0100) ?s2_data_buffer:
-							(alu_in_1_mux_sel ==4'b0101) ?s3_data_buffer:
+							(alu_in_1_mux_sel ==4'b0100) ?s2_data_buffer_q:
+							(alu_in_1_mux_sel ==4'b0101) ?s3_data_buffer_q:
 							(alu_in_1_mux_sel ==4'b0110) ?sp_q:
 							(alu_in_1_mux_sel ==4'b0111) ?8'd1:
 							(alu_in_1_mux_sel ==4'b1000) ?8'd0:8'b0;
@@ -762,8 +772,8 @@ assign		alu_in_cy		=(t_p_q ==S1_1 ||t_p_q ==S2_1
 								|| t_p_q == S3_1) ?pcl_cy:
 								1'b0
 								;
-assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer:
-								(reg_w_mux_ss	==3'b001) 	? s3_data_buffer:
+assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer_q:
+								(reg_w_mux_ss	==3'b001) 	? s3_data_buffer_q:
 								(reg_w_mux_ss ==3'b010) 	? alu_o:
 							//Clear the content of register
 								(reg_w_mux_ss ==3'b011) ? 	8'b0:
@@ -773,8 +783,8 @@ assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer:
 								(reg_w_mux_ss ==3'b110) ?	sx_d:
 								8'b0;
 assign		mem_wdata_ss	=	(mem_wdata_mux_sel	==4'h0) ?	ax_q:
-								(mem_wdata_mux_sel  ==4'h0) ?	s2_data_buffer:
-								(mem_wdata_mux_sel	==4'h1) ?	s3_data_buffer:
+								(mem_wdata_mux_sel  ==4'h0) ?	s2_data_buffer_q:
+								(mem_wdata_mux_sel	==4'h1) ?	s3_data_buffer_q:
 								(mem_wdata_mux_sel	==4'h2) ?	pch_q:
 								(mem_wdata_mux_sel	==4'h3) ?	pcl_q:
 								(mem_wdata_mux_sel	==4'h4) ?	bx_q:
@@ -815,12 +825,12 @@ always @(*)
 							//MOV A,@A+DPTR
 								(s2_mem_addr_sel == 4'hb) ?{pch_q,pcl_q} +ax_q:
 							//MOV A,@A+PC
-								(s2_mem_addr_sel == 4'hc) ?{8'b0,s2_data_buffer}:
+								(s2_mem_addr_sel == 4'hc) ?{8'b0,s2_data_buffer_q}:
 								
 								(s2_mem_addr_sel == 4'hd) ?{8'h0,sp_q}:
-								(s2_mem_addr_sel == 4'he) ?s2_data_buffer[7:3] + 16'h20:
+								(s2_mem_addr_sel == 4'he) ?s2_data_buffer_q[7:3] + 16'h20:
 							//For normal bit operation
-								{8'b0,s2_data_buffer[7:3],3'b0}
+								{8'b0,s2_data_buffer_q[7:3],3'b0}
 							//For SFR bit operation
 								;
 								
@@ -828,11 +838,11 @@ always @(*)
 								
 				
 			S3_1:
-				mem_addr_d	=	(s3_mem_addr_sel == 3'b000) ? {8'b0,s2_data_buffer}:
+				mem_addr_d	=	(s3_mem_addr_sel == 3'b000) ? {8'b0,s2_data_buffer_q}:
 								(s3_mem_addr_sel == 3'b001) ? {8'b0,sp_q}:
-								(s3_mem_addr_sel == 3'b010) ? {8'b0,s3_data_buffer}:
-								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer[7:3],3'b0}:
-								(s3_mem_addr_sel == 3'b100) ? {8'b0,s2_data_buffer[7:3],3'b0}
+								(s3_mem_addr_sel == 3'b010) ? {8'b0,s3_data_buffer_q}:
+								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer_q[7:3],3'b0}:
+								(s3_mem_addr_sel == 3'b100) ? {8'b0,s2_data_buffer_q[7:3],3'b0}
 								{pch_q,pcl_q}
 								;
 							//MOV A,direct
@@ -847,16 +857,16 @@ always @(*)
 								(s6_mem_addr_sel == 4'h5) ?{8'b0,r5_w}:
 								(s6_mem_addr_sel == 4'h6) ?{8'b0,r6_w}:
 								(s6_mem_addr_sel == 4'h7) ?{8'b0,r7_w}: 
-								(s6_mem_addr_sel == 4'h8) ?{8'b0,s2_data_buffer}:
-								(s6_mem_addr_sel == 4'h9) ?{8'b0,s3_data_buffer}:
+								(s6_mem_addr_sel == 4'h8) ?{8'b0,s2_data_buffer_q}:
+								(s6_mem_addr_sel == 4'h9) ?{8'b0,s3_data_buffer_q}:
 								(s6_mem_addr_sel == 4'ha) ?{dptrh_q,dptrl_q}:
 								(s6_mem_addr_sel == 4'hb) ?{8'b0,sp_q}:
 							//For push or pop
-								(s6_mem_addr_sel == 4'hd) ?s2_data_buffer[7:3] + 16'h20:
+								(s6_mem_addr_sel == 4'hd) ?s2_data_buffer_q[7:3] + 16'h20:
 								(s6_mem_addr_sel == 4'he) ?{pch_q,pcl_q}:
 							//For bit operation
 							
-								{8'b0,s2_data_buffer[7:3],3'b0};
+								{8'b0,s2_data_buffer_q[7:3],3'b0};
 							//For SFR bit operation
 			default:
 				mem_addr_d	=	mem_addr_q;
@@ -911,7 +921,12 @@ wire		is_SCON		=	(mem_addr[7:3]	==5'b1001_1)	;
 wire		is_P1		=	(mem_addr[7:3]	==5'b1001_0)	;
 wire		is_TCON		=	(mem_addr[7:3]	==5'b1000_1)	;
 wire		is_P0		=	(mem_addr[7:3]	==5'b1000_0)	;
-wire		is_bitE_SFR	=	is_Acc |is_B|is_PSW|is_SP|is_SCON|is_P1|is_TCON|is_P0;
+wire		is_P2		=	(mem_addr[7:3]	==5'b1010_0)	;
+wire		is_P3		=	(mem_addr[7:3]	==5'b1011_0)	;
+wire		is_IE		=	(mem_addr[7:3]	==5'b1010_1)	;
+wire		is_IP		=	(mem_addr[7:3]	==5'b1011_1)	;
+wire		is_bitE_SFR	=	is_Acc |is_B|is_SP|is_SCON|is_P1|is_TCON|is_P0|
+							is_P2|is_P3|is_IE|is_IP;
 							//This wire stand for the operation of SFR which aims to distinguish the normal bit operation from sfr bit operation	
 
 assign		is_wAcc	=	p_ssr	&	is_Acc;
@@ -937,9 +952,10 @@ always @(*) begin
 end
 */
 always @(*)
-	casez(instr_buffer)
+if(!is_double_cycle_exc_q)
+	casez(instr_buffer_q)
 		{MOV_A_RN,3'bz}:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer[2:0]},1'b1,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
 		MOV_A_DIR:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'hc,1'b0,1'b1,1'b1};
 		MOV_A_F_R0	=	{};
@@ -948,7 +964,13 @@ always @(*)
 		default:
 			mc_b	=	44'h0;
 	endcase
-							//Decoder unit (CU)
+else
+	casez(instr_buffer_q)	
+	
+	
+		default:
+	endcase
+							//Decoder and Control unit (CU)
 always @(*)
 	begincc
 	s3_mem_addr_sel			=		3'h0;
@@ -987,9 +1009,9 @@ always @(*)
 			This bit is decoded by the following circuit
 		*/
 	
-		bit_oper_flag			=	(instr_buffer	==MOV_C_BIT|instr_buffer ==MOV_BIT_C|instr_buffer == CLR_C|instr_buffer ==CLR_BIT|
-									instr_buffer	==SETB_C |instr_buffer ==SETB_BIT |instr_buffer ==ANL_C_BIT| instr_buffer ==ANL_C_NBIT |
-									instr_buffer	==ORL_C_BIT | instr_buffer ==ORL_C_NBIT |instr_buffer ==CPL_BIT |instr_buffer ==CPL_C)?		
+		bit_oper_flag			=	(instr_buffer_q	==MOV_C_BIT|instr_buffer_q ==MOV_BIT_C|instr_buffer_q == CLR_C|instr_buffer_q ==CLR_BIT|
+									instr_buffer_q	==SETB_C |instr_buffer_q ==SETB_BIT |instr_buffer_q ==ANL_C_BIT| instr_buffer_q ==ANL_C_NBIT |
+									instr_buffer_q	==ORL_C_BIT | instr_buffer_q ==ORL_C_NBIT |instr_buffer_q ==CPL_BIT |instr_buffer_q ==CPL_C)?		
 									1'b1:	1'b0;
 		if(t_p_q == S1_0 || t_p_q ==S1_1) begin
 				{is_s3_fetch,is_s2_fetch}	=	{mc_b[1],mc_b[0]};
@@ -1001,12 +1023,38 @@ always @(*)
 			{s2_mem_addr_sel,s2_rd_ram_nprg}
 				=	{mc_b[6:3],mc_b[2]};
 				alu_mode_sel	=	SUM;
+				//Default ALU operation
+				alu_in_0_mux_sel	=(t_p_q == S2_0) ?3'b010	:3'b111;
+				alu_in_1_mux_sel	=(t_p_q == S2_0) ?4'b0000	:4'b0001;
 			end
 		else if(t_p_q == S3_0 || t_p_q == S3_1) begin
 			{s3_mem_addr_sel,s3_rd_ram_nprg}
 				=	{mc_b[10:8],mc_b[7]};
 				alu_mode_sel	=	SUM;
+				//Default ALU operation
+				alu_in_0_mux_sel	=(t_p_q == S2_0) ?3'b010	:3'b111;
+				alu_in_1_mux_sel	=(t_p_q == S2_0) ?4'b0000	:4'b0001;
 			end
+		else if(t_p_q == S4_0|| t_p_q == S4_1) begin
+				reg_tar_ss			=mc_b[14:12];
+				reg_w_mux_ss		=mc_b[17:15];
+				ax_q_ss_01			=mc_b[27];
+				//bit_oper_flag		=mc_b[26];
+				is_base_pch			=mc_b[32];
+				is_base_pcl			=mc_b[33];
+				alu_in_0_mux_sel	=mc_b[36:34];
+				alu_in_1_mux_sel	=mc_b[40:37];
+				alu_mode_sel		=mc_b[31:28];
+				
+				bit_mode_sel		=mc_b[40:37];
+				set_or_clr			=mc_b[34];
+				bit_sel				=mc_b[31:28];
+			end
+		else if(t_p_q == S5_0|| t_p_q == S5_1) begin
+		
+		
+		
+		end
 		/*
 		else if(t_p_q == S4_0 || t_p_q == S4_1)
 			{reg_w_mux_ss}			
@@ -1014,7 +1062,7 @@ always @(*)
 		
 		else if
 		*/
-	end		
+	end	
 integer			index;
 always @(posedge clk)
 	if(!sys_rst_n)
@@ -1076,7 +1124,7 @@ always @(*)
 		begin
 			if(mem_addr[15:8] == 8'b0)
 				if(mem_addr[7]) 
-					casez(mem_addr)
+					case(mem_addr)
 						8'hB8:
 							c_mem_rdata	=	IP;
 						8'hB0:
@@ -1093,9 +1141,18 @@ always @(*)
 							c_mem_rdata	=	TCON;
 						8'h80:
 							c_mem_rdata	=	P0_r;
-						8'h:
+						8'hD0:
 							c_mem_rdata	=	{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,1'b0,pr_q};
-						
+						8'hE0:
+							c_mem_rdata	=	ax_q;
+						8'hF0:
+							c_mem_rdata	=	bx_q;
+						8'h81:
+							c_mem_rdata	=	sp_q;
+						8'h82:
+							c_mem_rdata	=	dptrl_q;
+						8'h83:
+							c_mem_rdata	=	dptrh_q;
 						
 						default:
 							c_mem_rdata	=	8'b0;
