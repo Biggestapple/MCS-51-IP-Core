@@ -81,7 +81,7 @@ localparam	[7:0]		MOV_A_DIR	=	8'hE5,MOV_A_F_R0 	=8'hE6,	MOV_A_F_R1 	=8'hE7,		MOV
 						LCALL		=8'h12,RET				=8'h22,	RETI		=8'h32,		LJMP		=8'h02,
 						SJMP		=8'h80,JMP				=8'h73,	JZ			=8'h60,		JNZ			=8'h70,
 						CJNE_A_DIR	=8'hB5,CJNE_A_IMM		=8'hB4,	CJNE_F_R0	=8'hB6,		CJNE_F_R1	=8'hB7,
-						DJNZ_RN		=8'hD5,NOP				=8'h00,
+									,NOP				=8'h00,
 						
 						CLR_C		=8'hC3,CLR_BIT			=8'hC2,	SETB_C		=8'hD3,		SETB_BIT	=8'hD2,
 						CPL_C		=8'hB3,CPL_BIT			=8'hB2,	ANL_C_BIT	=8'h82,		ANL_C_NBIT	=8'hB0,
@@ -173,17 +173,18 @@ wire	is_two_word_d;
 reg		is_three_word;
 wire	is_three_word_d;
 
-reg		is_double_cycle;
-reg		is_double_cycle_exc_q;
-wire	is_double_cycle_exc_d;
+reg		is_multi_cycles;
+reg		[1:0]		multi_cycle_times;
+							//Max instruction cycles --> 4 cycles
 							//Microcode rom unit
 reg		[43:0]		mc_b;	
 							//Internal Wire connection
 reg		is_base_pch;
 reg		is_base_pcl;
-reg		is_jump;
+reg		is_jump_flag;
 reg		is_call;
-reg		is_jump_en;
+reg		is_jump_active;
+reg		[1:0]		pc_jgen_sel;
 							//Interrupt related Wire
 wire	[7:0]		mc51_int_n;
 wire	is_interrupt_cycle		=	1'b0;
@@ -282,9 +283,9 @@ reg		[7:0]	alu_o;
 							//128 VALID INSTRUCTIONS
 `define IS_VALID_OPCODE(instr_buffer_q) 																															\
 	(
-		(instr_buffer_q	== MOV_A_RN	) ||(instr_buffer_q	==MOV_A_DIR)	||(instr_buffer_q	==MOV_A_F_R0)	||(instr_buffer_q	==MOV_A_F_R1)					||	\
-		(instr_buffer_q	== MOV_A_IMM) ||(instr_buffer_q	==MOV_RN_A)	||(instr_buffer_q	==MOV_RN_A)	||(instr_buffer_q	==MOV_RN_DIR)							||	\
-		(instr_buffer_q	== MOV_RN_IMM) ||(instr_buffer_q	==MOV_DIR_A)	||(instr_buffer_q	==MOV_DIR_RN)	||(instr_buffer_q	==MOV_DIR1_DIR2)			||	\
+		(instr_buffer_q[7:3]	== MOV_A_RN	) ||(instr_buffer_q	==MOV_A_DIR)	||(instr_buffer_q	==MOV_A_F_R0)	||(instr_buffer_q	==MOV_A_F_R1)			||	\
+		(instr_buffer_q	== MOV_A_IMM) ||(instr_buffer_q[7:3]	==MOV_RN_A)	||(instr_buffer_q[7:3]	==ADDC_A_RN)	||(instr_buffer_q	==MOV_RN_DIR)			||	\
+		(instr_buffer_q	== MOV_RN_IMM) ||(instr_buffer_q	==MOV_DIR_A)	||(instr_buffer_q[7:3]	==MOV_DIR_RN)	||(instr_buffer_q	==MOV_DIR1_DIR2)		||	\
 		(instr_buffer_q	== MOV_DIR_F_R0) ||(instr_buffer_q	==MOV_DIR_F_R1)	||(instr_buffer_q	==MOV_DIR_IMM)	||(instr_buffer_q	==MOV_F_R0_A)				||	\
 		(instr_buffer_q	== MOV_F_R1_A) ||(instr_buffer_q	==MOV_F_R0_DIR)	||(instr_buffer_q	==MOV_F_R1_DIR)	||(instr_buffer_q	==MOV_F_R0_IMM)				||	\
 		(instr_buffer_q	== MOV_DPTR_IMM) ||(instr_buffer_q	==MOVC_A_F_DPTRPA)	||(instr_buffer_q	==MOVC_A_F_PCPA)	||(instr_buffer_q	==MOVX_A_F_R0)		||	\
@@ -292,7 +293,7 @@ reg		[7:0]	alu_o;
 		
 		(instr_buffer_q	== MOVX_F_DPTR_A) ||(instr_buffer_q	==PUSH)	||(instr_buffer_q	==POP)	||(instr_buffer_q	==XCHD_A_F_R0)								||	\
 		(instr_buffer_q	== XCHD_A_F_R1) ||(instr_buffer_q	==XCH_A_DIR)	||(instr_buffer_q	==XCH_A_F_R0)	||(instr_buffer_q	==XCH_A_F_R1)				||	\
-		(instr_buffer_q	== XCH_A_RN) ||(instr_buffer_q	==SWAP)	||(instr_buffer_q	==ADD_A_RN)	||(instr_buffer_q	==ADD_A_DIR)								||	\
+		(instr_buffer_q[7:3]	== XCH_A_RN) ||(instr_buffer_q	==SWAP)	||(instr_buffer_q[7:3]	==ADD_A_RN)	||(instr_buffer_q	==ADD_A_DIR)					||	\
 		
 		(instr_buffer_q	== ADD_A_F_R0) ||(instr_buffer_q	==ADD_A_F_R1)	||(instr_buffer_q	==ADD_A_IMM)	||(instr_buffer_q	==ADDC_A_DIR)				||	\
 		(instr_buffer_q	== ADDC_A_F_R0) ||(instr_buffer_q	==ADDC_A_F_R1)	||(instr_buffer_q	==ADDC_A_IMM)	||(instr_buffer_q	==SUBB_A_DIR)				||	\
@@ -310,12 +311,15 @@ reg		[7:0]	alu_o;
 		(instr_buffer_q	== RR_A) ||(instr_buffer_q	==RRC_A)	||(instr_buffer_q	==LCALL)	||(instr_buffer_q	==RET)										||	\
 		(instr_buffer_q	== RETI) ||(instr_buffer_q	==LJMP)	||(instr_buffer_q	==SJMP)	||(instr_buffer_q	==JMP)												||	\
 		(instr_buffer_q	== JZ) ||(instr_buffer_q	==JNZ)	||(instr_buffer_q	==CJNE_A_DIR)	||(instr_buffer_q	==CJNE_A_IMM)								||	\
-		(instr_buffer_q	== CJNE_F_R0) ||(instr_buffer_q	==CJNE_F_R1)	||(instr_buffer_q	==DJNZ_RN)	||(instr_buffer_q	==NOP)								||	\
+		(instr_buffer_q	== CJNE_F_R0) ||(instr_buffer_q	==CJNE_F_R1)	||									(instr_buffer_q	==NOP)								||	\
 		(instr_buffer_q	== CLR_C) ||(instr_buffer_q	==CLR_BIT)	||(instr_buffer_q	==SETB_C)	||(instr_buffer_q	==SETB_BIT)									||	\
 		(instr_buffer_q	== CPL_C) ||(instr_buffer_q	==CPL_BIT)	||(instr_buffer_q	==ANL_C_BIT)	||(instr_buffer_q	==ANL_C_NBIT)							||	\
 		(instr_buffer_q	== ORL_C_BIT) ||(instr_buffer_q	==ORL_C_NBIT)	||(instr_buffer_q	==MOV_C_BIT)	||(instr_buffer_q	==MOV_BIT_C)					||	\
 		(instr_buffer_q	== JC) ||(instr_buffer_q	==JNC)	||(instr_buffer_q	==JB)	||(instr_buffer_q	==JNB)												||	\
-		(instr_buffer_q	== JBC))
+		(instr_buffer_q	== JBC) ||(instr_buffer_q[7:3] ==SUBB_A_RN)||(instr_buffer_q[7:3] ==INC_RN)||(instr_buffer_q[7:3] ==DEC_RN)								||	\
+		(instr_buffer_q[7:3] ==ANL_A_RN)||(instr_buffer_q[7:3] ==ORL_A_RN)||(instr_buffer_q[7:3] ==XRL_A_RN)||(instr_buffer_q[7:3] ==CJNE_RN_IMM)				||	\
+		(instr_buffer_q[7:3] ==DJNZ_RN) ||(instr_buffer_q[7:3] ==MOV_RN_DIR) ||(instr_buffer_q[7:3] ==ACALL)||(instr_buffer_q[7:3] ==AJMP)
+		)
 always @(posedge clk)
 	if(!sys_rst_n) begin
 		instr_buffer_q		<=	8'b0;
@@ -459,32 +463,34 @@ always @(*) begin
 										//Note S4 and S5 phase is used for arithmetic operation
 		
 		S6_0:
-			t_p_d	=	S6_1;
-		S6_1:
-										//Write the data to ram
-			if(mc_b[43]) begin
-				t_p_d	=	(ready_in) ? S1_0:S8_1;
-				we_n	=	1'b0;
-			end
-			else if(is_double_cycle_exc_q)					
-										//If the instruction needs two cycles?
-				t_p_d	=	S4_0;
-				
-			else
-				t_p_d	=	S7_0;
-										//The following phase for interrupt operation
-		S7_0:
 			begin
-				t_p_d	=	S7_1;
-				if(is_call || is_jump && is_jump_en) begin
-					pch_d	=	(pch_w_sel == 2'b00) ? pch_q:
-								(pch_w_sel == 2'b01) ? alu_o:
-								pch_q;
+				t_p_d	=	S6_1;
+				if(is_jump_flag && is_jump_active) 
 					pcl_d	=	(pcl_w_sel == 2'b00) ? pcl_q:
 								(pcl_w_sel == 2'b01) ? alu_o:
 								pcl_q;
-				end
 			end
+		S6_1: 
+			begin
+										//Write the data to ram
+				if(mc_b[43]) begin
+					t_p_d	=	(ready_in) ? S1_0:S8_1;
+					we_n	=	1'b0;
+				end
+				else if(is_multi_cycles)					
+										//If the instruction needs two cycles?
+					t_p_d	=	S4_0;
+				
+				else
+					t_p_d	=	S7_0;
+										//We can calculate the target address in one cpu cycle
+				if(is_jump_flag && is_jump_active)
+					pch_d	=	(pch_w_sel == 2'b00) ? pch_q:
+								(pch_w_sel == 2'b01) ? alu_o:
+								pch_q;
+			end
+		S7_0:							//The following phase for interrupt operation
+				t_p_d	=	S7_1;
 		S7_1:
 			t_p_d	=	S8_0;
 		S8_0:							//The S8 phase is called "the end phase",when an instruction 
@@ -657,10 +663,11 @@ always @(posedge clk)
 		sp_q	<=	8'b0;
 		
 		mem_addr_q	<=	16'b0;
-		is_double_cycle_exc_q	<=	1'b0;
 		
 		rs0_q	<=	1'b0;
 		rs1_q	<=	1'b0;
+		
+		multi_cycle_times	<=	2'b00;
 	end
 	else begin
 		mem_addr_q[15:8]	<=	(is_base_pch) ?alu_o:mem_addr_d[15:8];
@@ -697,16 +704,18 @@ always @(posedge clk)
 				sx_q	<=	sx_q;
 			end	
 		pcl_cy	<=	1'b0;
-		is_double_cycle_exc_q	<=	is_double_cycle_exc_d;
 		
-		if(		t_p_q ==S1_0	||t_p_q ==S1_1 || ((t_p_q ==S2_0 || t_p_q ==S2_1) && mc_b[2])
-								|| ((t_p_q ==S3_0 || t_p_q == S3_1) &&
-								mc_b[7])) begin
+		if(		t_p_q ==S1_0	||t_p_q ==S1_1 
+								|| ((t_p_q ==S2_0 || t_p_q ==S2_1) && mc_b[2])
+								|| ((t_p_q ==S3_0 || t_p_q == S3_1) &&mc_b[7])
+								|| ((t_p_q ==S6_0 || t_p_q == S6_1) &&( is_jump_flag && is_jump_active))
+								) begin
 							//May be JMP istruction will use these...
 			pch_q	<=	pch_d;
 			pcl_q	<=	pcl_d;
 			pcl_cy	<=	(t_p_q ==S1_0 ||t_p_q ==S2_0
-								|| t_p_q == S3_0) ?cy_d : pcl_cy;
+									|| t_p_q == S3_0 || t_p_q == S6_0) ?cy_d : pcl_cy;
+							//The pcl_cy is a shadow register actually
 		end
 		if(pro_flag_update && t_p_q == S4_1) begin
 							//The updae of arithmetic flag is controlled by pro_flag_update signal
@@ -746,13 +755,23 @@ always @(posedge clk)
 		dptrl_q	<=	(is_wdptrl)	?	mem_wdata:dptrl_q;
 		{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,1'b0,pr_q}
 				<=	(is_wPSW)	?	mem_wdata:{cy_q,ac_q,f0,rs1_q,rs0_q,ov_q,1'b0,pr_q};
+				
+		/*
+			CJNE	/JBC 	can change the value of cy_q
+		*/
+		if(is_jump_flag && t_p_q ==S6_0)
+			cy_q	<=	
+						(instr_buffer_q == (CJNE_A_DIR|CJNE_A_IMM|CJNE_F_R0 |CJNE_F_R1) ? is_jump_active:
+						(instr_buffer_q[7:3] ==CJNE_RN_IMM)? is_jump_active:
+						cy_q;
+		
+		multi_cycle_times	<=	(t_p_q == S4_0 && is_multi_cycles) ? multi_cycle_times +1'b1:
+								(t_p_q == S4_0 && ~is_multi_cycles)? multi_cycle_times:
+								2'b00;
 	end
 
 wire	[7:0]		ax_q_ss_01;
 assign	ax_q_ss_01	=(ax_comp_o) ?~ax_q +8'd1:ax_q;
-assign	is_double_cycle_exc_d	=	(t_p_q == S1_1 && is_double_cycle && ~is_double_cycle_exc_q) ? 1'b1:
-							(t_p_q	==	S4_0 && is_double_cycle_exc_q)? 1'b0:
-							is_double_cycle_exc_q;
 assign		alu_in_0	=	(alu_in_0_mux_sel == 3'b000) ?ax_q_ss_01:
 							(alu_in_0_mux_sel == 3'b001) ?s2_data_buffer_q:
 							(alu_in_0_mux_sel == 3'b010) ?8'd1:
@@ -884,7 +903,7 @@ The content of mc_b:
 	[6:3]						This is called the S2 memory address sel which decides where the address comes from 
 	7							If fetch data from S3, this bit will decide where the data comes from ROM or RAM,if fetch the data from ROM the PC value will add one automatically
 	[10:8]						This is called the S3 memory address sel which decides where the address comes from 
-	11							This bit -indicates whether the instruction needs double cycle
+	11							This bit -indicates whether the instruction needs multi-cycles
 	[14:12]						Target register sel bits that decides which register such as ax,bx and etc will be written new byte in S4 and S5
 	[17:15]						These bits decide where the byte come from .."reg_w_mux_ss"
 	[21:18]						These bits decide where the mem_wdata's address comes from "s6_mem_addr_sel"
@@ -892,7 +911,7 @@ The content of mc_b:
 	26							This bit shows if the statue register would be updated in s4_1 phase "bit_oper_flag"
 	27							This bit is used for sub related instruction "ax_comp_o"
 	
-	(alu_mode)					---//	bit_oper_flag	==	1'b0
+	(alu_mode)					---//	bit_oper_flag	==	1'b0 && is_jump_flag	==1'b0
 	
 	[31:28]						These bits decide the operation of the alu "alu_mode_sel"
 	
@@ -900,13 +919,20 @@ The content of mc_b:
 	[36:34]						These bits select where the alu's in0 data comes from "alu_in_0_mux_sel"
 	[40:37]						These bits select where the alu's in1 data comes from "alu_in_1_mux_sel"
 	
-	(bit mode)					---//	bit_oper_flag	==	1'b1
+	(bit mode)					---//	bit_oper_flag	==	1'b1 && is_jump_flag	==1'b0
 	
 	[31:28]						These bits decide which register to carry bit operation		"bit_sel"
 	34							This bit clears or sets the specific bit		"set_or_clr"								
 	[40:37]						These bits decide which bit operation to carry	on "bit_mode_sel"
 	
-	[42:41]						[is_jump,is_call]	for sub-routine and interrupt service
+	[42:41]						[is_jump_flag,is_call]	for sub-routine and interrupt service
+	
+	(jp mode)					--//	bit_oper_flag	(don't care) && is_jump_flag	==1'b1
+	[29:28]						"pcl_w_sel"
+	[31:30]						"pch_w_sel"
+	[33:32]						"pc_jgen_sel"
+	[42:34]						Reserved
+	
 	43							This bit will decide whether write data to ram
 							*/
 wire		p_ssr		=	(!we_n &&psen_n);	
@@ -952,7 +978,7 @@ always @(*) begin
 end
 */
 always @(*)
-if(!is_double_cycle_exc_q)
+if(multi_cycle_times == 2'b00)
 	casez(instr_buffer_q)
 		{MOV_A_RN,3'bz}:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
@@ -964,12 +990,13 @@ if(!is_double_cycle_exc_q)
 		default:
 			mc_b	=	44'h0;
 	endcase
-else
+else if(multi_cycle_times == 2'b01)
 	casez(instr_buffer_q)	
 	
 	
 		default:
 	endcase
+else if()
 							//Decoder and Control unit (CU)
 always @(*)
 	begincc
@@ -985,7 +1012,7 @@ always @(*)
 	pro_flag_update			=		1'b0;
 	ax_comp_o				=		1'b0;
 	
-	is_double_cycle			=		mc_b[11];
+	is_multi_cycles			=		mc_b[11];
 	alu_mode_sel			=		SUM;
 	reg_tar_ss				=		3'b0;
 	
@@ -995,10 +1022,11 @@ always @(*)
 	alu_in_0_mux_sel		=		3'b010;
 	alu_in_1_mux_sel		=		4'b0000;
 	
-	is_jump					=		1'b0;
+	is_jump_flag			=		1'b0;
 	is_call					=		1'b0;
-	is_jump_en				=		1'b0;
+	is_jump_active			=		1'b0;
 	
+	pc_jgen_sel				=		2'b00;
 	pch_w_sel				=		2'b00;
 	pcl_w_sel				=		2'b00;
 	
@@ -1011,8 +1039,41 @@ always @(*)
 	
 		bit_oper_flag			=	(instr_buffer_q	==MOV_C_BIT|instr_buffer_q ==MOV_BIT_C|instr_buffer_q == CLR_C|instr_buffer_q ==CLR_BIT|
 									instr_buffer_q	==SETB_C |instr_buffer_q ==SETB_BIT |instr_buffer_q ==ANL_C_BIT| instr_buffer_q ==ANL_C_NBIT |
-									instr_buffer_q	==ORL_C_BIT | instr_buffer_q ==ORL_C_NBIT |instr_buffer_q ==CPL_BIT |instr_buffer_q ==CPL_C)?		
+									instr_buffer_q	==ORL_C_BIT | instr_buffer_q ==ORL_C_NBIT |instr_buffer_q ==CPL_BIT |instr_buffer_q ==CPL_C	)?
 									1'b1:	1'b0;
+							//|instr_buffer_q	==JB|instr_buffer_q ==JNB|instr_buffer_q ==JC|instr_buffer_q ==JNC |instr_buffer_q ==JBC)?	
+		bit_sel					=	mc_b[31:28];
+		is_jump_flag			=	(instr_buffer_q	==LJMP | instr_buffer_q ==SJMP |instr_buffer_q ==JMP|instr_buffer_q ==JZ |
+									instr_buffer_q ==JNZ| instr_buffer_q ==CJNE_A_DIR|instr_buffer_q ==CJNE_A_IMM|instr_buffer_q ==CJNE_F_R0|
+									instr_buffer_q ==CJNE_F_R1 |instr_buffer_q[7:3] ==DJNZ_RN |
+									instr_buffer_q == JC |instr_buffer_q ==JNC|instr_buffer_q ==JB|instr_buffer_q ==JBC)?
+									1'b1:1'b0;
+		is_jump_active			=	(instr_buffer_q	==JZ) ?		ax_q	==8'b0:
+									(instr_buffer_q	==JNZ)?		ax_q	!=8'b0:
+							//The logic of CJNE is quite complex		
+									(instr_buffer_q ==CJNE_A_DIR)?		ax_q	!=s3_data_buffer_q:
+									(instr_buffer_q	==CJNE_A_IMM)?		ax_q	!=s2_data_buffer_q:
+									(instr_buffer_q[7:3] ==CJNE_RN_IMM
+									|instr_buffer_q	==CJNE_F_R0
+									|instr_buffer_q	==CJNE_F_R1
+									)?	 s2_data_buffer_d != s3_data_buffer_d:	
+									(instr_buffer_q	==JC)?	cy_q ==1'b1:
+									(instr_buffer_q ==JNC)?	cy_q ==1'b0:
+									(instr_buffer_q ==JB | JBC)?	c_bit ==1'b1:
+									(instr_buffer_q ==JNB) ?		c_bit ==1'b0:
+									1'b0;
+							//The CJNE instruction above just need one/two cycle
+							//DJNZ_RN	-- >DEC_A/DEC_DIR + JNZ/JZ
+							//JBC		-- >JB + CLR
+							
+							//LCALL		-- >PUSH PC ;PUSH PC; SJMP
+							//ACALL		-- >PUSH PC;PUSH PC; LJMP 
+							//RET/RETI	-- >POP PC;POP PC
+		
+		pc_jgen_sel				=	mc_b[33:32];
+		pch_w_sel				=	mc_b[31:30];
+		pcl_w_sel				=	mc_b[29:28]
+		
 		if(t_p_q == S1_0 || t_p_q ==S1_1) begin
 				{is_s3_fetch,is_s2_fetch}	=	{mc_b[1],mc_b[0]};
 				alu_mode_sel	=	SUM;
@@ -1051,9 +1112,12 @@ always @(*)
 				bit_sel				=mc_b[31:28];
 			end
 		else if(t_p_q == S5_0|| t_p_q == S5_1) begin
-		
-		
-		
+                alu_mode_sel        =   SUM;
+                reg_tar_ss          =   3'b0;
+                alu_in_0_mux_sel    =   3'b000;
+                alu_in_1_mux_sel    =   4'hf;
+                ax_q_ss_01          =   1'b0;
+                //  ax  <=  ax+8'b0 and the S5 phase can be removed in the future
 		end
 		/*
 		else if(t_p_q == S4_0 || t_p_q == S4_1)
