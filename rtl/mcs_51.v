@@ -10,6 +10,7 @@
 //			Biggest_apple 		2023.12.20		Build
 //								2024.1.1		The first test
 //								2024.2.2		Finished all the micocode
+//								2024.2.11		Add interrupt relevant circuit
 //-----------------------------------------------------------------------------------------------------------
 module	mcs_51(
 	input		clk,
@@ -50,6 +51,7 @@ localparam	[4:0]		MOV_A_RN	=	5'b1110_1,	MOV_RN_A	=	5'b1111_1,				MOV_DIR_RN	=5'b
 						ANL_A_RN	=	5'b0101_1,	ORL_A_RN	=	5'b0100_1,				XRL_A_RN	=5'b0110_1,	
 						CJNE_RN_IMM	=	5'b1011_1,	DJNZ_RN		=	5'b1101_1,				MOV_RN_DIR	=5'b1010_1
 						;
+localparam	[7:0]		INTERRUPT_P0=;
 localparam	[4:0]		ACALL		=	5'b10001,	AJMP		=	5'b00001;					
 localparam	[7:0]		MOV_A_DIR	=	8'hE5,MOV_A_F_R0 	=8'hE6,	MOV_A_F_R1 	=8'hE7,		MOV_A_IMM	 	=8'h74,
 						MOV_RN_IMM	=	8'h78,		MOV_DIR_A 	=8'hF5,		MOV_DIR1_DIR2=8'h85,
@@ -193,12 +195,15 @@ wire	intr_excu_done;
 wire	intr_flag;
 localparam		INT_VECTOR_0	=	16'h0003,
 				INT_VECTOR_1	=	16'h000b,
-				INT_VECTOR_3	=	16'h0013,
-				INT_VECTOR_4	=	16'h001b,
-				INT_VECTOR_5	=	16'h0023,
-				INT_VECTOR_6	=	16'h002b,
-				INT_VECTOR_7	=	16'h0033;	
-
+				INT_VECTOR_2	=	16'h0013,
+				INT_VECTOR_3	=	16'h001b,
+				INT_VECTOR_4	=	16'h0023,
+				INT_VECTOR_5	=	16'h002b,
+							//Not used
+				INT_VECTOR_6	=	16'h0033,
+							//Not used
+				INT_VECTOR_7	=	16'h003b;	
+							//Not used
 reg		s2_rd_ram_nprg;
 reg		s3_rd_ram_nprg;
 reg		is_s2_fetch;
@@ -262,6 +267,50 @@ reg		[7:0]	P3_r;
 reg		[7:0]	IE;
 reg		[7:0]	SCON;
 reg		[7:0]	TCON;
+							//Interrupt relevant signals
+reg		[15:0]		int_jp_addr_q;
+reg		[15:0]		int_jp_addr_d;
+wire	EA			=IE[7];
+wire	E_Reserved	=IE[6];
+wire	ET0			=IE[5];
+wire	ES			=IE[4];
+wire	ET1			=IE[3];
+wire	EX1			=IE[2];
+wire	ET0			=IE[1];
+wire	EX0			=IE[0];
+wire	[2:0]	IP_Reserved		=	IP[7:5];
+wire	PS			=IP[4];
+wire	PT1			=IP[3];
+wire	PX1			=IP[2];
+wire	PT0			=IP[1];
+wire	PX0			=IP[0];
+wire	int_in_ex0;
+wire	int_in_ex1;
+wire	int_in_et0;
+wire	int_in_et1;
+wire	int_in_es;
+reg		lo_priority_int_on;
+reg		hi_priority_int_on;	//Only "RETI" instruction can influence these two flags
+wire	int_in_ss_0;
+wire	int_in_ss_1;
+wire	int_in_ss_2;
+wire	int_in_ss_3;
+wire	int_in_ss_4;
+wire	int_in_sp_0;
+wire	int_in_sp_1;
+wire	int_in_sp_2;
+wire	int_in_sp_3;
+wire	int_in_sp_4;
+assign	int_in_ss_0	=	int_in_ex0 &EX0 &EA,
+		int_in_ss_1	=	int_in_et0 &ET0 &EA,
+		int_in_ss_2	=	int_in_ex1 &EX1 &EA,
+		int_in_ss_3	=	int_in_et1 &ET1 &EA,
+		int_in_ss_4	=	int_in_es  &ES  &EA;
+assign	int_in_sp_0	=	int_in_ss_0 &PX0,
+		int_in_sp_1	=	int_in_ss_1	&PT0,
+		int_in_sp_2	=	int_in_ss_2	&PX1,
+		int_in_sp_3	=	int_in_ss_3	&PT1,
+		int_in_sp_4	=	int_in_ss_4 &PS ;
 							/*
 		alu_mode_sel
 		4'h0	--	>	SUM
@@ -328,6 +377,7 @@ always @(posedge clk)
 
 		t_p_q				<=	S1_0;
 		mem_wdata			<=	8'b0;
+		int_jp_addr_q		<=	16'h0000;
 	end
 	else begin
 		t_p_q				<=t_p_d;
@@ -336,6 +386,7 @@ always @(posedge clk)
 		s3_data_buffer_q	<=s3_data_buffer_d;
 		
 		mem_wdata		<=(t_p_q == S6_1) ? mem_wdata_ss: mem_wdata;
+		int_jp_addr_q		<=int_jp_addr_d;
 	end
 always @(*) begin	
 	t_p_d	=	S1_0;		
@@ -344,6 +395,7 @@ always @(*) begin
 	rd_n	=	1'b1;
 	pch_d	=	pch_q;
 	pcl_d	=	pcl_q;
+	int_jp_addr_d	=	int_jp_addr_q;
 	
 	instr_buffer_d	=	instr_buffer_q;
 	s2_data_buffer_d	=	s2_data_buffer_q;
@@ -457,6 +509,7 @@ always @(*) begin
 		S4_1:
 			t_p_d	=	S5_0;
 		S5_0:
+										//S5 stage does nothing but acc = acc + 8'b0
 			t_p_d	=	S5_1;
 		S5_1:
 			t_p_d	=	S6_0;
@@ -468,6 +521,7 @@ always @(*) begin
 				if(is_jump_flag && is_jump_active) 
 					pcl_d	=	(pcl_w_sel == 2'b00) ? pcl_q:
 								(pcl_w_sel == 2'b01) ? alu_o:
+								(pcl_w_sel == 2'b10) ? int_jp_addr_q[7:0]:
 								pcl_q;
 			end
 		S6_1: 
@@ -487,12 +541,54 @@ always @(*) begin
 				if(is_jump_flag && is_jump_active)
 					pch_d	=	(pch_w_sel == 2'b00) ? pch_q:
 								(pch_w_sel == 2'b01) ? alu_o:
+								(pch_w_sel == 2'b10) ? int_jp_addr_q[15:8]:
 								pch_q;
 			end
 		S7_0:							//The following phase for interrupt operation
+			begin
 				t_p_d	=	S7_1;
+				if(!hi_priority_int_on && !lo_priority_int_on) begin
+					if(	int_in_sp_0 |int_in_sp_1|int_in_sp_2|int_in_sp_3|int_in_sp_4 |
+						int_in_pp_0 |int_in_pp_1|int_in_pp_2|int_in_pp_3|int_in_pp_4 |) begin
+						int_jp_addr_d	=	(int_in_sp_0) ? INT_VECTOR_0:
+											(int_in_sp_1) ? INT_VECTOR_1:
+											(int_in_sp_2) ? INT_VECTOR_2:
+											(int_in_sp_3) ? INT_VECTOR_3:
+											(int_in_sp_4) ? INT_VECTOR_4:
+											
+											(int_in_pp_0) ? INT_VECTOR_0:
+											(int_in_pp_1) ? INT_VECTOR_1:
+											(int_in_pp_2) ? INT_VECTOR_2:
+											(int_in_pp_3) ? INT_VECTOR_3:
+											(int_in_pp_4) ? INT_VECTOR_4:16'h0000;
+										/*
+											HIGH Priority
+													|
+													|
+													|
+											LOW	Priority
+										*/
+										//Load the INTERRUPT_P0 instruction
+						instr_buffer_d	=	INTERRUPT_P0;
+						t_p_d			=	S4_0;
+					end
+				end
+				else if(!hi_priority_int_on && lo_priority_int_on) begin
+										//The higher interrupt has interruptted the lower interrupt sub-routine
+					if(int_in_sp_0 |int_in_sp_1|int_in_sp_2|int_in_sp_3|int_in_sp_4) begin
+						int_jp_addr_d	=	(int_in_sp_0) ? INT_VECTOR_0:
+										(int_in_sp_1) ? INT_VECTOR_1:
+										(int_in_sp_2) ? INT_VECTOR_2:
+										(int_in_sp_3) ? INT_VECTOR_3:
+										(int_in_sp_4) ? INT_VECTOR_4:16'h0000;
+						instr_buffer_d	=	INTERRUPT_P0;
+						t_p_d			=	S4_0;
+				
+					end
+				end
+			end
 		S7_1:
-			t_p_d	=	S8_0;
+				t_p_d	=	S8_0;
 		S8_0:							//The S8 phase is called "the end phase",when an instruction 
 										// execution has completely done, then the cpu will turn to 
 										//S8 phase.In S8 phase, we can get to work on interrupt operaton
@@ -766,8 +862,8 @@ always @(posedge clk)
 						cy_q;
 		
 		multi_cycle_times	<=	(t_p_q == S4_0 && is_multi_cycles) ? multi_cycle_times +1'b1:
-								(t_p_q == S4_0 && ~is_multi_cycles)? multi_cycle_times:
-								2'b00;
+								(t_p_q == S4_0 && ~is_multi_cycles)? 2'b00:
+								multi_cycle_times;
 	end
 
 wire	[7:0]		ax_q_ss_01;
@@ -1127,6 +1223,23 @@ always @(*)
 		else if
 		*/
 	end	
+always @(posedge clk)
+	if(!sys_rst_n)
+		begin
+			lo_priority_int_on	<=	1'b0;
+			hi_priority_int_on	<=	1'b0;
+		end
+	else begin
+		hi_priority_int_on	<=	(t_p_q ==S7_0 &&(!hi_priority_int_on))? (int_in_sp_0|int_in_sp_1|int_in_sp_2|int_in_sp_3|int_in_sp_4):
+								(t_p_q ==S7_0 && instr_buffer_q ==RETI &&(hi_priority_int_on)) ?1'b0:
+								hi_priority_int_on;
+		lo_priority_int_on	<=	(t_p_q ==S7_0 &&(!lo_priority_int_on) &&(!hi_priority_int_on))? (int_in_pp_0|int_in_pp_1|
+								int_in_pp_2|int_in_pp_3|int_in_pp_4) &(!(int_in_sp_0|int_in_sp_1|int_in_sp_2|int_in_sp_3|int_in_sp_4)):
+								(t_p_q ==S7_0 && instr_buffer_q ==RETI && (!hi_priority_int_on)) ?1'b0:
+								(t_p_q ==S7_0 && instr_buffer_q ==RETI && (hi_priority_int_on)) ?lo_priority_int_on:
+								lo_priority_int_on;
+	end
+
 integer			index;
 always @(posedge clk)
 	if(!sys_rst_n)
