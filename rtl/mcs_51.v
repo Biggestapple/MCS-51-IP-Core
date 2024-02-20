@@ -12,6 +12,7 @@
 //								2024.2.2		Finished all the micocode
 //								2024.2.11		Add interrupt relevant circuit
 //								2024.2.19		Improve micocode structure
+//								2024.2.20		Fixed bugs in multi-cycles instructions
 //-----------------------------------------------------------------------------------------------------------
 module	mcs_51(
 	input		clk,
@@ -50,12 +51,13 @@ localparam	[4:0]		MOV_A_RN	=	5'b1110_1,	MOV_RN_A	=	5'b1111_1,				MOV_DIR_RN	=5'b
 						XCH_A_RN	=	5'b1100_1,	ADD_A_RN	=	5'b0010_1,				ADDC_A_RN	=5'b0011_1,
 						SUBB_A_RN	=	5'b1001_1,	INC_RN		=	5'b0000_1,				DEC_RN		=5'b0001_1,
 						ANL_A_RN	=	5'b0101_1,	ORL_A_RN	=	5'b0100_1,				XRL_A_RN	=5'b0110_1,	
-						CJNE_RN_IMM	=	5'b1011_1,	DJNZ_RN		=	5'b1101_1,				MOV_RN_DIR	=5'b1010_1
+						CJNE_RN_IMM	=	5'b1011_1,	DJNZ_RN		=	5'b1101_1,				MOV_RN_DIR	=5'b1010_1,
+						MOV_RN_IMM	=	5'b0111_1
 						;
 localparam	[7:0]		INTERRUPT_P0=	8'hFA;
 localparam	[4:0]		ACALL		=	5'b10001,	AJMP		=	5'b00001;					
 localparam	[7:0]		MOV_A_DIR	=	8'hE5,MOV_A_F_R0 	=8'hE6,	MOV_A_F_R1 	=8'hE7,		MOV_A_IMM	 	=8'h74,
-						MOV_RN_IMM	=	8'h78,		MOV_DIR_A 	=8'hF5,		MOV_DIR1_DIR2=8'h85,
+						MOV_DIR_A 	=8'hF5,		MOV_DIR1_DIR2=8'h85,
 						MOV_DIR_F_R0=	8'h86,MOV_DIR_F_R1	=8'h87,	MOV_DIR_IMM	=8'h75,		MOV_F_R0_A 	=8'hF6,
 						MOV_F_R1_A	=	8'hF7,MOV_F_R0_DIR	=8'hA6,	MOV_F_R1_DIR=8'hA7,		MOV_F_R0_IMM=8'h76,
 						MOV_F_R1_IMM=	8'h77,MOV_DPTR_IMM	=8'h90,	MOVC_A_F_DPTRPA	=8'h93,	MOVC_A_F_PCPA=8'h83,
@@ -327,8 +329,8 @@ localparam	[3:0]	SUM			=4'h0,
 					OR			=4'h3,
 					RL			=4'h4,
 					CPL			=4'h5,
-					RR			=4'h8,
-					SWAP		=4'h9;
+					RR			=4'h6,
+					SWAP		=4'h7;
 reg		[7:0]	alu_o;
 							//128 VALID INSTRUCTIONS
 
@@ -388,7 +390,7 @@ always @(posedge clk)
 		s2_data_buffer_q	<=s2_data_buffer_d;
 		s3_data_buffer_q	<=s3_data_buffer_d;
 		
-		mem_wdata		<=(t_p_q == S6_1) ? mem_wdata_ss: mem_wdata;
+		mem_wdata		<=(t_p_q == S6_0) ? mem_wdata_ss: mem_wdata;
 		int_jp_addr_q		<=int_jp_addr_d;
 	end
 always @(*) begin	
@@ -458,7 +460,7 @@ always @(*) begin
 				
 					end
 				t_p_d	=	(ready_in) ? S2_1:S2_0;
-				s2_data_buffer_d	=	c_mem_rdata;
+				s2_data_buffer_d	=	(ready_in) ?c_mem_rdata:s2_data_buffer_q;
 			end
 		S2_1:
 			t_p_d	=	(is_s3_fetch) ?S3_0:S4_0;
@@ -475,7 +477,7 @@ always @(*) begin
 						rd_n	=	1'b0;
 					end
 				t_p_d	=	(ready_in) ? S3_1:S3_0;
-				s3_data_buffer_d	=	c_mem_rdata;
+				s3_data_buffer_d	=	(ready_in) ?c_mem_rdata:s3_data_buffer_q;
 			end
 		S3_1:
 			t_p_d	=S4_0;
@@ -508,7 +510,7 @@ always @(*) begin
 				end
 				else if(is_multi_cycles)					
 										//If the instruction needs two cycles?
-					t_p_d	=	S4_0;
+					t_p_d	=	S2_0;
 				
 				else
 					t_p_d	=	S7_0;
@@ -778,10 +780,10 @@ always @(posedge clk)
 			end	
 		pcl_cy	<=	1'b0;
 		
-		if(		t_p_q ==S1_0	||t_p_q ==S1_1 
-								|| ((t_p_q ==S2_0 || t_p_q ==S2_1)  && ~mc_b[2])
-								|| ((t_p_q ==S3_0 || t_p_q == S3_1) && ~mc_b[7])
-								|| ((t_p_q ==S6_0 || t_p_q == S6_1) &&( is_jump_flag && is_jump_active))
+		if(			((t_p_q ==S1_0&ready_in)	||t_p_q ==S1_1 )
+								|| (((t_p_q ==S2_0 &ready_in) || t_p_q == S2_1) && ~mc_b[2])
+								|| (((t_p_q ==S3_0 &ready_in) || t_p_q == S3_1) && ~mc_b[7])
+								|| ((t_p_q ==S6_0 || (t_p_q == S6_1&ready_in) ) &&( is_jump_flag && is_jump_active))
 								) begin
 							//May be JMP istruction will use these...
 			pch_q	<=	pch_d;
@@ -838,8 +840,8 @@ always @(posedge clk)
 						(instr_buffer_q[7:3] ==CJNE_RN_IMM)? is_jump_active:cy_q;
 			end
 		
-		multi_cycle_times	<=	(t_p_q == S4_0 && is_multi_cycles) ? multi_cycle_times +1'b1:
-								(t_p_q == S4_0 && ~is_multi_cycles)? 2'b00:
+		multi_cycle_times	<=	(t_p_q == S6_1 && is_multi_cycles) ? multi_cycle_times +1'b1:
+								(t_p_q == S6_1 && ~is_multi_cycles)? 2'b00:
 								multi_cycle_times;
 	end
 
@@ -872,15 +874,15 @@ assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer_q:
 							//Not change 
 								(reg_w_mux_ss ==3'b100)	? 	ax_q:
 								(reg_w_mux_ss ==3'b101) ?	bx_q:
-								(reg_w_mux_ss ==3'b110) ?	sx_d:
+								(reg_w_mux_ss ==3'b110) ?	sx_q:
 								8'b0;
 assign		mem_wdata_ss	=	(mem_wdata_mux_sel	==4'h0) ?	ax_q:
-								(mem_wdata_mux_sel  ==4'h0) ?	s2_data_buffer_q:
-								(mem_wdata_mux_sel	==4'h1) ?	s3_data_buffer_q:
-								(mem_wdata_mux_sel	==4'h2) ?	pch_q:
-								(mem_wdata_mux_sel	==4'h3) ?	pcl_q:
-								(mem_wdata_mux_sel	==4'h4) ?	bx_q:
-								(mem_wdata_mux_sel	==4'h5)	?	sx_q:
+								(mem_wdata_mux_sel  ==4'h1) ?	s2_data_buffer_q:
+								(mem_wdata_mux_sel	==4'h2) ?	s3_data_buffer_q:
+								(mem_wdata_mux_sel	==4'h3) ?	pch_q:
+								(mem_wdata_mux_sel	==4'h4) ?	pcl_q:
+								(mem_wdata_mux_sel	==4'h5) ?	bx_q:
+								(mem_wdata_mux_sel	==4'h6)	?	sx_q:
 																8'b0
 								;
 assign		r0_w			=	{7'b0,rs1_q,rs0_q,7'b0};
@@ -934,7 +936,8 @@ always @(*)
 								(s3_mem_addr_sel == 3'b001) ? {8'b0,sp_q}:
 								(s3_mem_addr_sel == 3'b010) ? {8'b0,s3_data_buffer_q}:
 								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer_q[7:3],3'b0}:
-								(s3_mem_addr_sel == 3'b100) ? {8'b0,s2_data_buffer_q[7:3],3'b0}:
+								(s3_mem_addr_sel == 3'b100) ? {8'b0,r0_w}:
+								(s3_mem_addr_sel == 3'b101) ? {8'b0,r1_w}:
 								{pch_q,pcl_q}
 								;
 							//MOV A,direct
@@ -980,7 +983,7 @@ The content of mc_b:
 	[10:8]						This is called the S3 memory address sel which decides where the address comes from 
 	11							This bit -indicates whether the instruction needs multi-cycles
 	[14:12]						Target register sel bits that decides which register such as ax,bx and etc will be written new byte in S4 and S5
-	[17:15]						These bits decide where the byte come from .."reg_w_mux_ss"
+	[17:15]						These bits decide where the byte comes from .."reg_w_mux_ss"
 	[21:18]						These bits decide where the mem_wdata's address comes from "s6_mem_addr_sel"
 	[25:22]						These bits decide where the mem_wdata comes from	"mem_wdata_mux_sel"
 	26							This bit shows if the statue register would be updated in s4_1 phase "bit_oper_flag"
@@ -1058,29 +1061,68 @@ if(multi_cycle_times == 2'b00)
 		{MOV_A_RN,3'bz}:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
 		MOV_A_DIR:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'hc,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		MOV_A_F_R0:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b0,1'b1,1'b1};
+		MOV_A_F_R1:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b0,1'b1,1'b1};
 		{MOV_RN_A,3'bz}:
 			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b0};
 		MOV_A_IMM:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+		{MOV_DIR_RN,3'bz}:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b1,1'b1};
+		{MOV_RN_DIR,3'bz}:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h2,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
+		{MOV_RN_IMM,3'bz}:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+		MOV_DIR_A:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h8,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+		MOV_DIR1_DIR2:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+		MOV_DIR_F_R0:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h0,1'b1,1'b1,1'b1};
+		MOV_DIR_F_R1:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h1,1'b1,1'b1,1'b1};
+		MOV_DIR_IMM:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+		MOV_F_R0_A:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+		MOV_F_R1_A:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		
+		MOV_F_R0_DIR:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
+		MOV_F_R1_DIR:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
+			
+		MOV_F_R0_IMM:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
+		MOV_F_R1_IMM:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
+		MOV_DPTR_IMM:
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'ha,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
+		MOVC_A_F_DPTRPA:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+		
 		NOP:
-			mc_b	=	44'h0;
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
-			mc_b	=	44'h0;
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
 else if(multi_cycle_times == 2'b01)
 	casez(instr_buffer_q)	
-		8'bzzzz_zzzz:
-			mc_b	=44'h0;
-	
+		MOV_DIR1_DIR2:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+		MOV_DIR_F_R0,MOV_DIR_F_R1:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+		MOV_F_R0_DIR,MOV_F_R0_DIR:
+			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b010,1'b1,4'hc,1'b1,1'b1,1'b1};
 		default:
-			mc_b	=44'h0;
+			mc_b	={1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
 else begin
-	mc_b	=	44'h0;
-
+	mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 end
 							//Decoder and Control unit (CU)
 always @(*)
@@ -1091,7 +1133,7 @@ always @(*)
 	reg_w_mux_ss			=		3'h8;
 	s2_rd_ram_nprg			=		1'b0;
 	s3_rd_ram_nprg			=		1'b0;
-	mem_wdata_mux_sel		=		4'h0;
+	mem_wdata_mux_sel		=		mc_b[25:22];
 	is_s2_fetch				=		1'b0;
 	is_s3_fetch				=		1'b0;
 	pro_flag_update			=		1'b0;
@@ -1177,8 +1219,8 @@ always @(*)
 				=	{mc_b[10:8],mc_b[7]};
 				alu_mode_sel	=	SUM;
 				//Default ALU operation
-				alu_in_0_mux_sel	=(t_p_q == S2_0) ?3'b010	:3'b111;
-				alu_in_1_mux_sel	=(t_p_q == S2_0) ?4'b0000	:4'b0001;
+				alu_in_0_mux_sel	=(t_p_q == S3_0) ?3'b010	:3'b111;
+				alu_in_1_mux_sel	=(t_p_q == S3_0) ?4'b0000	:4'b0001;
 			end
 		else if(t_p_q == S4_0|| t_p_q == S4_1) begin
 				reg_tar_ss			=mc_b[14:12];
@@ -1196,6 +1238,7 @@ always @(*)
 				bit_sel				=mc_b[31:28];
 			end
 		else if(t_p_q == S5_0|| t_p_q == S5_1) begin
+				reg_w_mux_ss		=	3'b010;
                 alu_mode_sel        =   SUM;
                 reg_tar_ss          =   3'b0;
                 alu_in_0_mux_sel    =   3'b000;
