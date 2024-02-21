@@ -152,9 +152,6 @@ reg		[15:0]	mem_addr_d;
 
 reg		rs0_q;
 reg		rs1_q;
-reg		rs0_d;
-reg		rs1_d;
-
 wire	[7:0]	r0_w;
 wire	[7:0]	r1_w;
 wire	[7:0]	r2_w;
@@ -174,10 +171,10 @@ reg		[7:0]	s2_data_buffer_d;
 reg		[7:0]	s3_data_buffer_q;
 reg		[7:0]	s3_data_buffer_d;
 
-reg		is_two_word;
-wire	is_two_word_d;
-reg		is_three_word;
-wire	is_three_word_d;
+//reg		is_two_word;
+//wire	is_two_word_d;
+//reg		is_three_word;
+//wire	is_three_word_d;
 
 reg		is_multi_cycles;
 reg		[1:0]		multi_cycle_times;
@@ -427,8 +424,14 @@ always @(*) begin
 		S1_1:
 			begin
 				t_p_d	=	(is_s2_fetch) ?S2_0 :S4_0;
-				psen_n_cologic	=	1'b0;
-				pch_d	=	alu_o;
+				if(multi_cycle_times ==2'b00) begin
+					psen_n_cologic	=	1'b0;
+					pch_d	=	alu_o;
+				end
+				else begin
+					psen_n_cologic	=	1'b1;
+					pch_d	=	pch_q;
+				end
 			end
 		
 		S2_0: begin
@@ -520,14 +523,17 @@ always @(*) begin
 			end
 		S6_1: 
 			begin
-										//Write the data to ram
+										//Write the data to ram ... ...
 				if(mc_b[43]) begin
-					t_p_d	=	(ready_in) ? S1_0:S8_1;
+					if(is_multi_cycles)
+						t_p_d	=	(ready_in) ? S1_0:S1_1;
+					else
+						t_p_d	=	(ready_in) ? S1_0:S8_1;
 					we_n	=	1'b0;
 				end
 				else if(is_multi_cycles)					
 										//If the instruction needs two cycles?
-					t_p_d	=	S2_0;
+					t_p_d	=	S1_1;
 				
 				else
 					t_p_d	=	S7_0;
@@ -750,7 +756,7 @@ always @(posedge clk)
 		dptrl_q	<=	8'b0;
 		pcl_cy	<=	1'b0;
 		
-		sp_q	<=	8'b0;
+		sp_q	<=	8'h07;
 		
 		mem_addr_q	<=	16'b0;
 		
@@ -764,8 +770,6 @@ always @(posedge clk)
 			mem_addr_q[15:8]	<=	(is_base_pch) ?alu_o:mem_addr_d[15:8];
 			mem_addr_q[7:0]		<=	(is_base_pcl) ?alu_o:mem_addr_d[7:0];
 		end
-		rs0_q	<=	rs0_d;
-		rs1_q	<=	rs1_d;
 		if(t_p_q == S4_1 || t_p_q	==	S5_1)
 			begin
 				ax_q	<=	ax_q;
@@ -788,11 +792,11 @@ always @(posedge clk)
 			end
 		else 
 			begin
-				ax_q	<=	ax_q;
-				dptrh_q	<=	dptrh_q;
-				dptrl_q	<=	dptrl_q;
-				sp_q	<=	sp_q;
-				bx_q	<=	bx_q;
+				ax_q	<=	(is_wAcc) 	?	mem_wdata:ax_q;
+				bx_q	<=	(is_wB)		?	mem_wdata:bx_q;
+				sp_q	<=	(is_wSp)	?	mem_wdata:sp_q;
+				dptrh_q	<=	(is_wdptrh)	?	mem_wdata:dptrh_q;
+				dptrl_q	<=	(is_wdptrl)	?	mem_wdata:dptrl_q;
 				sx_q	<=	sx_q;
 			end	
 		pcl_cy	<=	1'b0;
@@ -832,21 +836,22 @@ always @(posedge clk)
 		end
 		else begin
 			zo_q	<=	zo_q;
-			cy_q	<=	cy_q;
-			ov_q	<=	ov_q;
-			ac_q	<=	ac_q;
-			pr_q	<=	pr_q;
+			{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,pr_q}
+				<=	(is_wPSW)	?	mem_wdata:{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,pr_q};
 		end
 		/*
 			Directly addressing can change the value of SFR(Acc,PSW,B) too		......
+			However,the register can not be setted up correctly .......
 		*/
-		ac_q	<=	(is_wAcc) 	?	mem_wdata:ac_q;
+		/*
+		ax_q	<=	(is_wAcc) 	?	mem_wdata:ax_q;
 		bx_q	<=	(is_wB)		?	mem_wdata:bx_q;
 		sp_q	<=	(is_wSp)	?	mem_wdata:sp_q;
 		dptrh_q	<=	(is_wdptrh)	?	mem_wdata:dptrh_q;
 		dptrl_q	<=	(is_wdptrl)	?	mem_wdata:dptrl_q;
 		{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,pr_q}
 				<=	(is_wPSW)	?	mem_wdata:{cy_q,ac_q,f0_q,rs1_q,rs0_q,ov_q,pr_q};
+		*/
 				
 		/*
 			CJNE	/JBC 	can change the value of cy_q
@@ -941,7 +946,7 @@ always @(*)
 								(s2_mem_addr_sel == 4'hd) ?{8'h0,sp_q}:
 								(s2_mem_addr_sel == 4'he) ?s2_data_buffer_q[7:3] + 16'h20:
 							//For normal bit operation
-								{8'b0,s2_data_buffer_q[7:3],3'b0}
+								{8'b0,s2_data_buffer_q[7:3],3'b000}
 							//For SFR bit operation
 								;
 								
@@ -952,7 +957,7 @@ always @(*)
 				mem_addr_d	=	(s3_mem_addr_sel == 3'b000) ? {8'b0,s2_data_buffer_q}:
 								(s3_mem_addr_sel == 3'b001) ? {8'b0,sp_q}:
 								(s3_mem_addr_sel == 3'b010) ? {8'b0,s3_data_buffer_q}:
-								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer_q[7:3],3'b0}:
+								(s3_mem_addr_sel == 3'b011) ? {8'b0,s2_data_buffer_q[7:3],3'b000}:
 								(s3_mem_addr_sel == 3'b100) ? {8'b0,r0_w}:
 								(s3_mem_addr_sel == 3'b101) ? {8'b0,r1_w}:
 								{pch_q,pcl_q}
@@ -978,7 +983,7 @@ always @(*)
 								(s6_mem_addr_sel == 4'he) ?{pch_q,pcl_q}:
 							//For bit operation
 							
-								{8'b0,s2_data_buffer_q[7:3],3'b0};
+								{8'b0,s2_data_buffer_q[7:3],3'b000};
 							//For SFR bit operation
 			default:
 				mem_addr_d	=	{pch_q,pcl_q};
@@ -1032,11 +1037,11 @@ The content of mc_b:
 	
 	43							This bit will decide whether write data to ram
 							*/
-wire		p_ssr		=	(!we_n &&psen_n_cologic);	
+wire		p_ssr		=	(!we_n &&psen_n	);	
 wire		is_PSW		=	(mem_addr[7:3]	==5'b1101_0)	;
 wire		is_Acc		=	(mem_addr[7:3]	==5'b1110_0)	;
 wire		is_B		=	(mem_addr[7:3]	==5'b1111_0)	;
-wire		is_SP		=	(mem_addr[7:3]	==5'b1000_1)	;
+wire		is_SP		=	(mem_addr[7:0]	==8'h81	)		;
 wire		is_dptrh	=	(mem_addr[7:0]	==8'h83	)		;
 							//This is because the architecture of this "mc51" is not quite compatible to the original one	:)
 wire		is_dptrl	=	(mem_addr[7:0]	==8'h82		)	;
@@ -1048,7 +1053,7 @@ wire		is_P2		=	(mem_addr[7:3]	==5'b1010_0)	;
 wire		is_P3		=	(mem_addr[7:3]	==5'b1011_0)	;
 wire		is_IE		=	(mem_addr[7:3]	==5'b1010_1)	;
 wire		is_IP		=	(mem_addr[7:3]	==5'b1011_1)	;
-wire		is_bitE_SFR	=	is_Acc |is_B|is_SP|is_SCON|is_P1|is_TCON|is_P0|
+wire		is_bitE_SFR	=	is_Acc |is_B|is_SCON|is_P1|is_TCON|is_P0|
 							is_P2|is_P3|is_IE|is_IP;
 							//This wire stand for the operation of SFR which aims to distinguish the normal bit operation from sfr bit operation	
 
@@ -1078,72 +1083,102 @@ always @(*)
 if(multi_cycle_times == 2'b00)
 	casez(instr_buffer_q)
 		{MOV_A_RN,3'bz}:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
 		MOV_A_DIR:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 			
 		MOV_A_F_R0:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
 		MOV_A_F_R1:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
 		
 		{MOV_RN_A,3'bz}:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b0};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b0};
 		MOV_A_IMM:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
 		{MOV_DIR_RN,3'bz}:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b1,1'b1};
 		{MOV_RN_DIR,3'bz}:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h2,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h2,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		{MOV_RN_IMM,3'bz}:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
 		MOV_DIR_A:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h8,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b1};
 		MOV_DIR1_DIR2:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
 		MOV_DIR_F_R0:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h0,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h0,1'b1,1'b1,1'b1};
 		MOV_DIR_F_R1:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h1,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b111,1'b0,4'h1,1'b1,1'b1,1'b1};
 		MOV_DIR_IMM:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h2,4'h8,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
 		MOV_F_R0_A:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
 		MOV_F_R1_A:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
 		
 		MOV_F_R0_DIR:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
 		MOV_F_R1_DIR:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b1,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
 			
 		MOV_F_R0_IMM:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b100,1'b1,4'h8,1'b0,1'b1,1'b1};
 		MOV_F_R1_IMM:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b101,1'b1,4'h8,1'b0,1'b1,1'b1};
+
 		MOV_DPTR_IMM:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'ha,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
-		MOVC_A_F_DPTRPA:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b000,3'd0,	1'b0,3'b111,1'b0,4'ha,1'b0,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'ha,3'b000,3'd1,	1'b1,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
 		
+		MOVC_A_F_DPTRPA:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b000,3'd0,	1'b0,3'b111,1'b0,4'ha,1'b0,1'b0,1'b1};
+		MOVC_A_F_PCPA:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b000,3'd0,	1'b0,3'b111,1'b0,4'hb,1'b0,1'b0,1'b1};
+		MOVX_A_F_R0:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+		MOVX_A_F_R1:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		MOVX_A_F_DPTR:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,	1'b0,3'b111,1'b0,4'h9,1'b1,1'b0,1'b1};
+		MOVX_F_R0_A:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+		MOVX_F_R1_A:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h9,3'b100,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		MOVX_F_DPTR_A:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h9,1'b1,1'b0,1'b1};
+		PUSH:
+			mc_b	=	{1'b0,2'b00,4'h6,3'b010,2'b00,4'h0,1'b0,1'b0,4'h0,4'h9,3'b010,3'd3,1'b1,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
+			//The PUSH operation: 
+			//	SP <- SP+1
+			//	Write Direct to ram block
+		POP:
+			mc_b	=	{1'b1,2'b00,4'h6,3'b011,2'b00,4'h0,1'b0,1'b0,4'h2,4'h8,3'b010,3'd3,1'b0,3'b001,1'b1,4'h8,1'b0,1'b1,1'b1};
+		XCH_A_DIR:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		NOP:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
 else if(multi_cycle_times == 2'b01)
 	casez(instr_buffer_q)	
 		MOV_DIR1_DIR2:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
 		MOV_DIR_F_R0,MOV_DIR_F_R1:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
 		MOV_F_R0_DIR,MOV_F_R0_DIR:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b010,1'b1,4'hc,1'b1,1'b1,1'b1};
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b010,1'b1,4'hc,1'b1,1'b1,1'b1};
+		MOV_DPTR_IMM:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'ha,3'b001,3'd2,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		PUSH:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'hb,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+		XCH_A_DIR:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b110,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
-			mc_b	={1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
 else begin
-	mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
+	mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 end
 							//Decoder and Control unit (CU)
 always @(*)
@@ -1162,7 +1197,7 @@ always @(*)
 	
 	is_multi_cycles			=		mc_b[11];
 	alu_mode_sel			=		SUM;
-	reg_tar_ss				=		3'b0;
+	reg_tar_ss				=		3'b000;
 	
 	is_base_pch				=		1'b0;
 	is_base_pcl				=		1'b0;
@@ -1178,9 +1213,9 @@ always @(*)
 	pch_w_sel				=		2'b00;
 	pcl_w_sel				=		2'b00;
 	
-	bit_sel					=		4'b0;
+	bit_sel					=		4'h0;
 	set_or_clr				=		1'b0;
-	bit_mode_sel			=		3'b0;
+	bit_mode_sel			=		3'b000;
 		/*
 			This bit is decoded by the following circuit
 		*/
@@ -1261,7 +1296,7 @@ always @(*)
 		else if(t_p_q == S5_0|| t_p_q == S5_1) begin
 				reg_w_mux_ss		=	3'b010;
                 alu_mode_sel        =   SUM;
-                reg_tar_ss          =   3'b0;
+                reg_tar_ss          =   3'b000;
                 alu_in_0_mux_sel    =   3'b000;
                 alu_in_1_mux_sel    =   4'hf;
                 ax_comp_o           =   1'b0;
