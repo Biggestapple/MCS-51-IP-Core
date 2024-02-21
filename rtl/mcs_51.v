@@ -38,6 +38,7 @@ module	mcs_51(
 	input		ready_in
 	
 );
+reg			psen_n_cologic;
 reg			[7:0]		mem_wdata;
 reg			we_n;
 reg			rd_n;
@@ -393,9 +394,14 @@ always @(posedge clk)
 		mem_wdata		<=(t_p_q == S6_0) ? mem_wdata_ss: mem_wdata;
 		int_jp_addr_q		<=int_jp_addr_d;
 	end
+always @(negedge clk)
+	if(!sys_rst_n)
+		psen_n	<=	1'b1;
+	else
+		psen_n	<=	psen_n_cologic;
 always @(*) begin	
 	t_p_d	=	S1_0;		
-	psen_n	=	1'b1;
+	psen_n_cologic	=	1'b1;
 	we_n	=	1'b1;
 	rd_n	=	1'b1;
 	pch_d	=	pch_q;
@@ -414,14 +420,14 @@ always @(*) begin
 				else begin
 					t_p_d	=	(ready_in) ? S1_1:S1_0;
 					instr_buffer_d	=	c_mem_rdata;
-					psen_n	=	1'b0;
+					psen_n_cologic	=	1'b0;
 					pcl_d	=	alu_o;
 				end
 			end
 		S1_1:
 			begin
 				t_p_d	=	(is_s2_fetch) ?S2_0 :S4_0;
-				psen_n	=	1'b0;
+				psen_n_cologic	=	1'b0;
 				pch_d	=	alu_o;
 			end
 		
@@ -433,13 +439,13 @@ always @(*) begin
 							//Fetch the data from prg_rom
 							alu_in_0_mux_sel	=2'b10;
 							alu_in_1_mux_sel	=3'b000;
-							psen_n	=	1'b0;
+							psen_n_cologic	=	1'b0;
 							rd_n	=	1'b1;
 						end
 					3'd1:
 						begin
 							//Fetch the data from ram
-							psen_n	=	1'b1;
+							psen_n_cologic	=	1'b1;
 							rd_n	=	1'b0;
 						end
 			
@@ -450,37 +456,48 @@ always @(*) begin
 		*/
 				if(~s2_rd_ram_nprg)
 					begin
-						psen_n	=	1'b0;
+						psen_n_cologic	=	1'b0;
 						rd_n	=	1'b1;
-						pcl_d	=	alu_o;
+						pcl_d	=	(s2_mem_addr_sel == 4'h8) ?alu_o :pcl_q;
+							//In this case PC value will add "1" automatically
 					end
 				else begin
-						psen_n	=	1'b1;
+						psen_n_cologic	=	1'b1;
 						rd_n	=	1'b0;
 				
 					end
 				t_p_d	=	(ready_in) ? S2_1:S2_0;
 				s2_data_buffer_d	=	(ready_in) ?c_mem_rdata:s2_data_buffer_q;
 			end
-		S2_1:
-			t_p_d	=	(is_s3_fetch) ?S3_0:S4_0;
+		S2_1:begin
+				psen_n_cologic	=	1'b1;
+				rd_n	=	1'b1;
+				t_p_d	=	(is_s3_fetch) ?S3_0:S4_0;
+				if(~s2_rd_ram_nprg)
+					pch_d	=	(s2_mem_addr_sel == 4'h8) ?alu_o :pch_q;
+			end
 		S3_0:
 			begin
 				if(~s3_rd_ram_nprg)
 					begin
-						psen_n	=	1'b0;
+						psen_n_cologic	=	1'b0;
 						rd_n	=	1'b1;
 						pcl_d	=	alu_o;
 					end
 				else begin
-						psen_n	=	1'b1;
+						psen_n_cologic	=	1'b1;
 						rd_n	=	1'b0;
 					end
 				t_p_d	=	(ready_in) ? S3_1:S3_0;
 				s3_data_buffer_d	=	(ready_in) ?c_mem_rdata:s3_data_buffer_q;
 			end
-		S3_1:
-			t_p_d	=S4_0;
+		S3_1: begin
+				psen_n_cologic	=	1'b1;
+				rd_n	=	1'b1;
+				t_p_d	=S4_0;
+				if(~s3_rd_ram_nprg)
+					pch_d	=	alu_o;
+			end
 		S4_0:				
 			t_p_d	=	S4_1;
 		S4_1:
@@ -970,7 +987,9 @@ always @(*)
 	end
 assign		mem_addr		=	(t_p_q == S6_1|
 								(t_p_q == S2_0 && s2_rd_ram_nprg)|
-								(t_p_q == S3_0 && s3_rd_ram_nprg))? mem_addr_d:mem_addr_q;		
+								(t_p_q == S3_0 && s3_rd_ram_nprg)|
+								(t_p_q == S2_0 && ~s2_rd_ram_nprg
+								&& s2_mem_addr_sel != 4'h8))? mem_addr_d:mem_addr_q;		
 							/*
 The content of mc_b:
 	BITS	|					FUNCTION	|
@@ -1013,7 +1032,7 @@ The content of mc_b:
 	
 	43							This bit will decide whether write data to ram
 							*/
-wire		p_ssr		=	(!we_n &&psen_n);	
+wire		p_ssr		=	(!we_n &&psen_n_cologic);	
 wire		is_PSW		=	(mem_addr[7:3]	==5'b1101_0)	;
 wire		is_Acc		=	(mem_addr[7:3]	==5'b1110_0)	;
 wire		is_B		=	(mem_addr[7:3]	==5'b1111_0)	;
@@ -1046,7 +1065,7 @@ always @(*) begin
 	is_wPSW	=1'b0;
 	is_wB	=1'b0;
 	is_wSp	=1'b0;
-	if(!we_n &&psen_n)
+	if(!we_n &&psen_n_cologic)
 		begin
 			is_wAcc	=	(mem_addr[]	==	{8'h00,4'he});
 			is_wPSW	=	(mem_addr[]	==	{8'h00,4'});
@@ -1062,10 +1081,12 @@ if(multi_cycle_times == 2'b00)
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b000,3'd0,1'b0,3'b000,1'b0,{1'b0,instr_buffer_q[2:0]},1'b1,1'b0,1'b1};
 		MOV_A_DIR:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
+			
 		MOV_A_F_R0:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
 		MOV_A_F_R1:
-			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b0,1'b1,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b001,3'd0,	1'b0,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		
 		{MOV_RN_A,3'bz}:
 			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,{1'b0,instr_buffer_q[2:0]},3'b100,3'd0,1'b0,3'b000,1'b0,4'h0,1'b0,1'b0,1'b0};
 		MOV_A_IMM:
@@ -1103,7 +1124,7 @@ if(multi_cycle_times == 2'b00)
 		MOV_DPTR_IMM:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'ha,3'b100,3'd0,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
 		MOVC_A_F_DPTRPA:
-			mc_b	=	{1'b1,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
+			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h1,4'h9,3'b000,3'd0,	1'b0,3'b111,1'b0,4'ha,1'b0,1'b0,1'b1};
 		
 		NOP:
 			mc_b	=	{1'b0,2'b0,4'b0,3'b0,2'b0,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
@@ -1294,7 +1315,7 @@ always @(posedge clk)
 				end
 		end
 	else begin
-		if		(!we_n && psen_n)
+		if		(!we_n && psen_n_cologic)
 			begin
 				if(mem_addr[15:8] == 8'b0)
 					begin
@@ -1330,7 +1351,7 @@ always @(posedge clk)
 		end
 
 always @(*)
-	if(~rd_n && psen_n)
+	if(~rd_n && psen_n_cologic)
 		begin
 			if(mem_addr[15:8] == 8'b0)
 				if(mem_addr[7]) 
