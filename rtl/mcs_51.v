@@ -785,6 +785,9 @@ always @(posedge clk)
 						3'd3:	sp_q	<=	reg_w_d;
 						3'd4:	bx_q	<=	reg_w_d;
 						3'd5:	sx_q	<=	reg_w_d;
+						3'd6:	ax_q[3:0]
+										<=	reg_w_d[3:0];
+							//For "XCHD" instruction			
 					default:
 						begin
 						end
@@ -905,6 +908,7 @@ assign		mem_wdata_ss	=	(mem_wdata_mux_sel	==4'h0) ?	ax_q:
 								(mem_wdata_mux_sel	==4'h4) ?	pcl_q:
 								(mem_wdata_mux_sel	==4'h5) ?	bx_q:
 								(mem_wdata_mux_sel	==4'h6)	?	sx_q:
+								(mem_wdata_mux_sel	==4'h7) ?	{s3_data_buffer_q[7:4],ax_q[3:0]}:
 																8'b0
 								;
 assign		r0_w			=	{7'b0,rs1_q,rs0_q,7'b0};
@@ -1155,6 +1159,22 @@ if(multi_cycle_times == 2'b00)
 			mc_b	=	{1'b1,2'b00,4'h6,3'b011,2'b00,4'h0,1'b0,1'b0,4'h2,4'h8,3'b010,3'd3,1'b0,3'b001,1'b1,4'h8,1'b0,1'b1,1'b1};
 		XCH_A_DIR:
 			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
+		XCH_A_F_R0:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+		XCH_A_F_R1:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		
+			//Exchange digits
+			//XCHD exchanges the lower-order nibble of the Acc (3 -0 bit) 
+		XCHD_A_F_R0:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h7,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h0,1'b1,1'b1,1'b1};
+		XCHD_A_F_R1:
+			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h7,4'h8,3'b001,3'd5,1'b1,3'b000,1'b1,4'h1,1'b1,1'b1,1'b1};
+		
+		SWAP_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h7,1'b0,1'b0,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		ADD_A_DIR:
+			mc_b	=	{1'b0,2'b00,4'h5,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b010,3'd0,1'b0,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		NOP:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
@@ -1172,8 +1192,10 @@ else if(multi_cycle_times == 2'b01)
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'ha,3'b001,3'd2,	1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
 		PUSH:
 			mc_b	=	{1'b1,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h1,4'hb,3'b100,3'd0,	1'b0,3'b111,1'b0,4'hc,1'b1,1'b0,1'b1};
-		XCH_A_DIR:
+		XCH_A_DIR,XCH_A_F_R0,XCH_A_F_R1:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b110,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		XCHD_A_F_R0,XCHD_A_F_R1:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b110,3'd6,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
