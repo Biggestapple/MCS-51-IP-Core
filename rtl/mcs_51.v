@@ -429,14 +429,11 @@ always @(*) begin
 			begin
 				t_p_d	=	(is_s2_fetch) ?S2_0 :
 							(is_s3_fetch) ?S3_0 : S4_0;
-				if(multi_cycle_times ==2'b00) begin
-					psen_n_cologic	=	1'b0;
+				psen_n_cologic	=	1'b1;
+				if(multi_cycle_times ==2'b00) 
 					pch_d	=	alu_o;
-				end
-				else begin
-					psen_n_cologic	=	1'b1;
+				else
 					pch_d	=	pch_q;
-				end
 			end
 		
 		S2_0: begin
