@@ -130,6 +130,7 @@ reg		cy_q;
 reg		cy_d;
 reg		pcl_cy;
 reg		dptrl_cy;
+reg		pcgl_cy;
 reg		ov_q;
 reg		ov_d;
 reg		f0_q;
@@ -332,7 +333,9 @@ localparam	[3:0]	SUM			=4'h0,
 					RR			=4'h6,
 					SWAP		=4'h7,
 					SUMC		=4'h8,
-					SUB			=4'h9;
+					SUB			=4'h9,
+					RLC			=4'ha,
+					RRC			=4'hb;
 reg		[7:0]	alu_o;
 							//128 VALID INSTRUCTIONS
 
@@ -521,7 +524,7 @@ always @(*) begin
 					pcl_d	=	(pcl_w_sel == 2'b00) ? pcl_q:
 								(pcl_w_sel == 2'b01) ? alu_o:
 								(pcl_w_sel == 2'b10) ? int_jp_addr_q[7:0]:
-								pcl_q;
+								s3_data_buffer_q;
 			end
 		S6_1: 
 			begin
@@ -536,8 +539,9 @@ always @(*) begin
 				if(is_jump_flag && is_jump_active)
 					pch_d	=	(pch_w_sel == 2'b00) ? pch_q:
 								(pch_w_sel == 2'b01) ? alu_o:
+										//How can we caculate the target address without adding any external logic ?
 								(pch_w_sel == 2'b10) ? int_jp_addr_q[15:8]:
-								pch_q;
+								s2_data_buffer_q;
 			end
 		S7_0:
 			if(is_multi_cycles)
@@ -655,15 +659,19 @@ always @(*)
 			zo_d	=(alu_o == 8'b0);
 		end
 		else if (alu_mode_sel ==	RL)
-			alu_o	={ax_q[6:0],ax_q[7]};
+			alu_o	={alu_in_0[6:0],alu_in_0[7]};
 		else if (alu_mode_sel ==	RR)
-			alu_o	={ax_q[0],ax_q[7:1]};
+			alu_o	={alu_in_0[0],alu_in_0[7:1]};
 		else if (alu_mode_sel ==	CPL)
 			alu_o	=~alu_in_0;
 		else if (alu_mode_sel ==	SWAP)
 			alu_o	={alu_in_0[3:0],alu_in_0[7:4]};
 		else if (alu_mode_sel ==	SUMC)
 			alu_o	=alu_in_0 +alu_in_1 +cy_q;
+		else if (alu_mode_sel ==	RLC)
+			alu_o	={alu_in_0[6:0],cy_q};
+		else if	(alu_mode_sel ==	RRC)
+			alu_o	={cy_q,alu_in_0[7:1]};
 		else
 			alu_o = 8'b00;
 	end
@@ -757,6 +765,7 @@ always @(posedge clk)
 		dptrl_q	<=	8'b0;
 		pcl_cy	<=	1'b0;
 		dptrl_cy	<=	1'b0;
+		pcgl_cy	<=	1'b0;
 		
 		sp_q	<=	8'h07;
 		
@@ -772,7 +781,8 @@ always @(posedge clk)
 			mem_addr_q[15:8]	<=	(is_base_pch) ?alu_o:mem_addr_d[15:8];
 			mem_addr_q[7:0]		<=	(is_base_pcl) ?alu_o:mem_addr_d[7:0];
 		end
-		if(t_p_q == S4_1 || t_p_q	==	S5_1)
+		if(t_p_q == S4_1 || t_p_q	==	S5_1
+			&& !bit_oper_flag && !is_jump_flag)
 			begin
 				ax_q	<=	ax_q;
 				dptrh_q	<=	dptrh_q;
@@ -809,7 +819,7 @@ always @(posedge clk)
 		if(			((t_p_q ==S1_0&ready_in)	||t_p_q ==S1_1 )
 								|| (((t_p_q ==S2_0 &ready_in) || t_p_q == S2_1) && ~mc_b[2])
 								|| (((t_p_q ==S3_0 &ready_in) || t_p_q == S3_1) && ~mc_b[7])
-								|| ((t_p_q ==S6_0 || (t_p_q == S6_1&ready_in) ) &&( is_jump_flag && is_jump_active))
+								|| ((t_p_q ==S6_0 || t_p_q == S6_1) &&( is_jump_flag && is_jump_active))
 								) begin
 							//May be JMP istruction will use these...
 			pch_q	<=	pch_d;
@@ -831,12 +841,19 @@ always @(posedge clk)
 			else
 				begin
 					zo_q	<=	zo_d	;
-					cy_q	<=	cy_d	;
+					// cy_q	<=	cy_d	;
+					
 					ov_q	<=	ov_d	;
 					ac_q	<=	ac_d	;
 					pr_q	<=	
 								(ax_q[0] ^ ax_q[1] ^ax_q[2] ^ax_q[3]
 								^ax_q[4] ^ax_q[5] ^ax_q[6] ^ax_q[7]);
+					if(instr_buffer_q == RLC_A)
+						cy_q	<=	ax_q[7];
+					else if(instr_buffer_q == RRC_A)
+						cy_q	<=	ax_q[0];
+					else
+						cy_q	<=	cy_d;
 				end
 		end
 		else begin
@@ -874,7 +891,9 @@ always @(posedge clk)
 			For INC_DPTR
 		*/
 		dptrl_cy	<=	((t_p_q ==S4_1) && instr_buffer_q ==INC_DPTR)? cy_d:
-						(multi_cycle_times ==0 && t_p_q == S7_1) ?1'b0:dptrl_cy; 
+						(multi_cycle_times ==0 && t_p_q == S7_1) ?1'b0:dptrl_cy;
+		pcgl_cy		<=	((t_p_q ==S6_0) && (pc_jgen_sel ==2'b01 || pc_jgen_sel ==2'b10)) ?cy_d:
+						(t_p_q ==S6_1) ? 1'b0 :pcgl_cy;
 	end
 
 wire	[7:0]		ax_q_ss_01;
@@ -900,6 +919,7 @@ assign		alu_in_ss_1	=	(alu_in_1_mux_sel ==4'b0000) ?pcl_q:
 assign		alu_in_cy		=(t_p_q ==S1_1 ||t_p_q ==S2_1
 								|| t_p_q == S3_1) ?pcl_cy:
 								((t_p_q ==S4_0 ||t_p_q ==S4_1) &&(instr_buffer_q ==INC_DPTR)) ? dptrl_cy:
+								((t_p_q ==S6_1) && (pc_jgen_sel ==2'b01 ||pc_jgen_sel ==2'b10)) ?pcgl_cy:
 								1'b0
 								;
 assign		reg_w_d			=	(reg_w_mux_ss ==3'b000) 	? s2_data_buffer_q:
@@ -1274,6 +1294,42 @@ if(multi_cycle_times == 2'b00)
 		XRL_DIR_IMM:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h2,1'b0,1'b0,4'h0,4'h0,3'b001,3'd5,1'b1,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		
+		CLR_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b111,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		CPL_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h5,1'b0,1'b0,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		RL_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h4,1'b0,1'b0,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		RLC_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'ha,1'b0,1'b1,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+							//RLC: Rotate accumulator left through carry flag
+							//A6 ... A0 CY; CY <- A0;
+		RR_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h6,1'b0,1'b0,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		RRC_A:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'hb,1'b0,1'b1,4'h0,4'h0,3'b010,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+			
+		LCALL:
+			mc_b	=	{1'b1,2'b00,4'h6,3'b010,2'b00,4'h0,1'b0,1'b0,4'h4,4'hb,3'b010,3'd3,1'b1,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+							//LCALL:
+							//PC <- PC+3
+							//PUSH PCL
+							//PUSH PCH
+							//LOAD TARGET PC
+		RET:
+			mc_b	=	{1'b0,2'b00,4'h6,3'b011,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b010,3'd3,1'b1,3'b111,1'b0,4'hd,1'b1,1'b0,1'b1};
+							//RET:
+							//POP PCH
+							//POP PCL
+							//LOAD TARGET PC
+		LJMP:
+			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b00,4'b1111,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
+		SJMP:
+			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b01,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
+		JMP:
+			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b10,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		
+		
 		NOP:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
@@ -1303,6 +1359,17 @@ else if(multi_cycle_times == 2'b01)
 			mc_b	=	{1'b1,2'b00,4'h5,3'b100,2'b00,4'h3,1'b0,1'b0,4'h6,4'h8,3'b010,3'd5,1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b0};
 		XRL_DIR_IMM:
 			mc_b	=	{1'b1,2'b00,4'h5,3'b100,2'b00,4'h2,1'b0,1'b0,4'h6,4'h8,3'b010,3'd5,1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b0};
+		LCALL:
+			mc_b	=	{1'b1,2'b00,4'h6,3'b010,2'b00,4'h0,1'b0,1'b0,4'h3,4'hb,3'b010,3'd3,1'b1,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		RET:
+			mc_b	=	{1'b0,2'b00,4'h6,3'b011,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b010,3'd3,1'b1,3'b001,1'b1,4'h8,1'b0,1'b1,1'b0};
+		default:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
+	endcase
+else if(multi_cycle_times == 2'b10)
+		casez(instr_buffer_q)	
+		LCALL,RET:
+			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b00,4'b1111,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
 		default:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
@@ -1335,9 +1402,8 @@ always @(*)
 	alu_in_0_mux_sel		=		3'b010;
 	alu_in_1_mux_sel		=		4'b0000;
 	
-	is_jump_flag			=		1'b0;
+	is_jump_flag			=		mc_b[42];
 	is_call					=		1'b0;
-	is_jump_active			=		1'b0;
 	
 	pc_jgen_sel				=		2'b00;
 	pch_w_sel				=		2'b00;
@@ -1357,25 +1423,29 @@ always @(*)
 									1'b1:	1'b0;
 							//|instr_buffer_q	==JB|instr_buffer_q ==JNB|instr_buffer_q ==JC|instr_buffer_q ==JNC |instr_buffer_q ==JBC)?	
 		bit_sel					=	mc_b[31:28];
+		/*
 		is_jump_flag			=	(instr_buffer_q	==LJMP | instr_buffer_q ==SJMP |instr_buffer_q ==JMP|instr_buffer_q ==JZ |
 									instr_buffer_q ==JNZ| instr_buffer_q ==CJNE_A_DIR|instr_buffer_q ==CJNE_A_IMM|instr_buffer_q ==CJNE_F_R0|
 									instr_buffer_q ==CJNE_F_R1 |instr_buffer_q[7:3] ==DJNZ_RN |
-									instr_buffer_q == JC |instr_buffer_q ==JNC|instr_buffer_q ==JB|instr_buffer_q ==JBC)?
+									instr_buffer_q == JC |instr_buffer_q ==JNC|instr_buffer_q ==JB|instr_buffer_q ==JBC|
+									instr_buffer_q == LCALL|instr_buffer_q == RET |instr_buffer_q == RETI)?
 									1'b1:1'b0;
+		*/
 		is_jump_active			=	(instr_buffer_q	==JZ) ?		ax_q	==8'b0:
 									(instr_buffer_q	==JNZ)?		ax_q	!=8'b0:
 							//The logic of CJNE is quite complex		
 									(instr_buffer_q ==CJNE_A_DIR)?		ax_q	!=s3_data_buffer_q:
 									(instr_buffer_q	==CJNE_A_IMM)?		ax_q	!=s2_data_buffer_q:
 									(instr_buffer_q[7:3] ==CJNE_RN_IMM
-									|instr_buffer_q	==CJNE_F_R0
-									|instr_buffer_q	==CJNE_F_R1
+									||instr_buffer_q	==CJNE_F_R0
+									||instr_buffer_q	==CJNE_F_R1
 									)?	 s2_data_buffer_d != s3_data_buffer_d:	
 									(instr_buffer_q	==JC)?	cy_q ==1'b1:
 									(instr_buffer_q ==JNC)?	cy_q ==1'b0:
-									(instr_buffer_q ==JB | JBC)?	c_bit ==1'b1:
-									(instr_buffer_q ==JNB) ?		c_bit ==1'b0:
-									1'b0;
+									(instr_buffer_q ==JB ||
+									 instr_buffer_q	==JBC) ?	c_bit ==1'b1:
+									(instr_buffer_q ==JNB) ?	c_bit ==1'b0:
+									1'b1;
 							//The CJNE instruction above just need one/two cycle
 							//DJNZ_RN	-- >DEC_A/DEC_DIR + JNZ/JZ
 							//JBC		-- >JB + CLR
@@ -1433,8 +1503,20 @@ always @(*)
                 ax_comp_o           =   1'b0;
                 //  ax  <=  ax+8'b0 and the S5 phase can be removed in the future
 		end
-		else if(t_p_q == S6_0 || t_p_q == S6_1)
+		else if(t_p_q == S6_0 || t_p_q == S6_1) begin
 			s6_mem_addr_sel		=	mc_b[21:18];
+			if(pc_jgen_sel == 2'b01) begin
+				alu_mode_sel	=	SUM;
+				alu_in_0_mux_sel	=	(t_p_q == S6_0) ? 3'b001:3'b111;
+				alu_in_1_mux_sel	=	(t_p_q == S6_0) ? 4'h0:4'h1;
+			end
+			else if(pc_jgen_sel == 2'b10) begin
+				alu_mode_sel	=	SUM;
+				alu_in_0_mux_sel	=	(t_p_q == S6_0) ? 3'b000:3'b111;
+				alu_in_1_mux_sel	=	(t_p_q == S6_0) ? 4'h2:4'h3;
+			
+			end
+		end
 		/*
 		else if(t_p_q == S4_0 || t_p_q == S4_1)
 			{reg_w_mux_ss}			
