@@ -1324,11 +1324,10 @@ if(multi_cycle_times == 2'b00)
 							//LOAD TARGET PC
 		LJMP:
 			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b00,4'b1111,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b1,1'b1};
-		SJMP:
+		SJMP,JZ,JNZ:
 			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b01,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
 		JMP:
 			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b10,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
-		
 		
 		NOP:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
@@ -1507,7 +1506,7 @@ always @(*)
 			s6_mem_addr_sel		=	mc_b[21:18];
 			if(pc_jgen_sel == 2'b01) begin
 				alu_mode_sel	=	SUM;
-				alu_in_0_mux_sel	=	(t_p_q == S6_0) ? 3'b001:3'b111;
+				alu_in_0_mux_sel	=	(t_p_q == S6_0) ? 3'b001:{~s2_data_buffer_q[7],2'b11};
 				alu_in_1_mux_sel	=	(t_p_q == S6_0) ? 4'h0:4'h1;
 			end
 			else if(pc_jgen_sel == 2'b10) begin
