@@ -7,35 +7,36 @@
 // 
 // 	MODIFICATION HISTORY:
 //	$Log$
-//			Biggest_apple 		2023.12.20		Build
+//			Biggest_apple 		2023.12.20		Create the project
 //								2024.1.1		The first test
 //								2024.2.2		Finished all the micocode
 //								2024.2.11		Add interrupt relevant circuit
 //								2024.2.19		Improve micocode structure
 //								2024.2.20		Fixed bugs in multi-cycles instructions
+//								2024.9.3		Fixed bugs in FSM circuit
 //-----------------------------------------------------------------------------------------------------------
 module	mcs_51(
-	input		clk,
-	input		sys_rst_n,
+	input				clk,
+	input				sys_rst_n,
 	
-	output			[15:0]	mem_addr,
-	input			[7:0]	mem_rdata,
+	output		[15:0]	mem_addr,
+	input		[7:0]	mem_rdata,
 	//output	reg		[7:0]	mem_wdata,
 	
 	//output		we_n,
 	//output		rd_n,
-	output	reg	psen_n,
+	output	reg			psen_n,
 	
-	input	reg	int_n_0,
+	input	reg			int_n_0,
 	
-	input	reg	int_n_1,
+	input	reg			int_n_1,
 	
-	output	tx,
-	input	rx,
+	output				tx,
+	input				rx,
 	inout	[7:0]		p1,
 	inout	[7:0]		p2,
 	
-	input		ready_in
+	input				ready_in
 	
 );
 reg			psen_n_cologic;
@@ -119,7 +120,7 @@ localparam		S1_0	=4'd0,
 				S8_1	=4'd15;
 							//User register Here
 reg		[7:0]	ax_q;
-wire	[7:0]	reg_w_d;
+wire	[7:0]	reg_w_d;	
 reg		[7:0]	bx_q;
 reg		[7:0]	sx_q;		//For bit-operation's intermediate variables
 reg		[7:0]	dptrh_q;
@@ -878,11 +879,13 @@ always @(posedge clk)
 		/*
 			CJNE	/JBC 	can change the value of cy_q
 		*/
-		if(is_jump_flag && t_p_q ==S6_0) begin
+		if(is_jump_flag && t_p_q ==S6_0)
 			cy_q	<=	
-						(instr_buffer_q == (CJNE_A_DIR|CJNE_A_IMM|CJNE_F_R0 |CJNE_F_R1)) ? is_jump_active:
-						(instr_buffer_q[7:3] ==CJNE_RN_IMM)? is_jump_active:cy_q;
-			end
+						(instr_buffer_q == CJNE_A_DIR) ? (ax_q < s3_data_buffer_q):
+						(instr_buffer_q == CJNE_A_IMM) ? (ax_q < s2_data_buffer_q):
+						(instr_buffer_q[7:3] ==CJNE_RN_IMM
+						||instr_buffer_q ==CJNE_F_R0
+						||instr_buffer_q ==CJNE_F_R1)?		s2_data_buffer_d >s3_data_buffer_d:cy_q;
 		
 		multi_cycle_times	<=	(t_p_q == S7_0 && is_multi_cycles) ? multi_cycle_times +1'b1:
 								(t_p_q == S7_0 && ~is_multi_cycles)? 2'b00:
@@ -1328,6 +1331,8 @@ if(multi_cycle_times == 2'b00)
 			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b01,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
 		JMP:
 			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b10,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
+		CJNE_A_DIR:
+			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'b0000,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b1,3'b000,1'b1,4'h8,1'b0,1'b1,1'b1};
 		
 		NOP:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
@@ -1362,6 +1367,8 @@ else if(multi_cycle_times == 2'b01)
 			mc_b	=	{1'b1,2'b00,4'h6,3'b010,2'b00,4'h0,1'b0,1'b0,4'h3,4'hb,3'b010,3'd3,1'b1,3'b111,1'b0,4'h8,1'b0,1'b0,1'b0};
 		RET:
 			mc_b	=	{1'b0,2'b00,4'h6,3'b011,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b010,3'd3,1'b1,3'b001,1'b1,4'h8,1'b0,1'b1,1'b0};
+		CJNE_A_DIR:
+			mc_b	=	{1'b0,2'b10,4'h0,3'b000,2'b01,4'b0101,1'b0,1'b0,4'h4,4'hb,3'b100,3'd0,1'b0,3'b111,1'b0,4'h8,1'b0,1'b0,1'b1};
 		default:
 			mc_b	=	{1'b0,2'b00,4'h0,3'b000,2'b00,4'h0,1'b0,1'b0,4'h0,4'h0,3'b100,3'd0,	1'b0,3'b000,1'b0,4'h8,1'b0,1'b0,1'b0};
 	endcase
