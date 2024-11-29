@@ -1,4 +1,4 @@
-//----------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 //	FILE: 		mc8051_biu.v
 // 	AUTHOR:		Biggest_apple
 // 	
@@ -8,7 +8,8 @@
 // 	MODIFICATION HISTORY:
 //	$Log$
 //			Biggest_apple				2024.9.31		Create the file
-//-----------------------------------------------------------------------------------------------------------
+//			Biggest_apple				2024.11.29		Rebuild the logic
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 `timescale 				1ns/1ps
 `include				"global_param.v"
 module biu(
@@ -30,7 +31,7 @@ module biu(
 	
 	input		[15:0]		i_s2_mem_addr_d,
 	input		[15:0]		i_s3_mem_addr_d,
-	input		[15:0]		i_s6_mem_addr_d,
+	input		[15:0]		i_s5_mem_addr_d,
 	
 	
 														//Naive-Memory Interface
@@ -47,26 +48,26 @@ always @(posedge clk or negedge reset_n)
 	if(~reset_n)
 		mem_addr			<=	16'h00_00;
 	else begin
-		if(i_t_p_d	==	S1_0		)
+		if		(i_t_p_d	==	`S1_0	)
 			mem_addr		<=	{i_pch,	i_pcl};
-		else if(i_t_p_d	==	S2_0	)
+		else if	(i_t_p_d	==	`S2_0	)
 			mem_addr		<=	i_s2_mem_addr_d;
-		else if(i_t_p_d	==	S3_0	)
+		else if	(i_t_p_d	==	`S3_0	)
 			mem_addr		<=	i_s3_mem_addr_d;
-		else if(i_t_p_d	==	S6_0	)
-			mem_addr		<=	i_s6_mem_addr_d;
+		else if	(i_t_p_d	==	`S5_0	)
+			mem_addr		<=	i_s5_mem_addr_d;
 		else
 			mem_addr		<=	mem_addr;
 	end
-
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(posedge clk oe negedge reset_n)
 	if(~reset_n)
-		mem_wdata			<=	8'hff;
-	else if(i_t_p_d	==	S6_0	)
+		mem_wdata			<=	8'bzzzz_zzzz;
+	else if(i_t_p_d	==	`S5_0	)
 		mem_wdata			<=	i_mem_wdata;
 	else
 		mem_wdata			<=	mem_wdata;
-		
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(*) begin
 		mem_we_n			=	i_we_n;
 		mem_rd_n			=	i_rd_n;

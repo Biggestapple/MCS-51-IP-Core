@@ -183,7 +183,7 @@
 `define					INT_VECTOR_7		16'h003b
 								//Not used
 								
-`define					MCODE_WIDTH			32*2
+`define					MCODE_WIDTH			24*2
 `define					STACK_RESET			8'h07
 								//Basic 8051 Module
 `define					IRAM_SIZE			128
