@@ -103,6 +103,13 @@ module	mc51_cu(
 	output		[7:0]		o_pcl,
 	output		[7:0]		o_pch,
 	output		[7:0]		o_psw,
+	output		[7:0]		o_acc,
+	output		[7:0]		o_bx,
+	output		[7:0]		o_sp,
+	output		[7:0]		o_dpl,
+	output		[7:0]		o_dph,
+	output		[7:0]		o_sx_0,
+	output		[7:0]		o_sx_1,
 	output		[7:0]		o_s2_data_buffer,
 	output		[7:0]		o_s3_data_buffer,
 	output		[7:0]		o_s1_instr_buffer,
@@ -649,5 +656,12 @@ assign		o_int_ack_n			=		int_ack_n;
 assign		o_int_reti			=		int_reti;
 assign		o_psw				=		psw_q;
 assign		o_s1_instr_buffer	=		s1_instr_buffer_q;
+assign		o_acc				=		acc_q;
+assign		o_bx				=		b_q;
+assign		o_sp				=		sp_q;
+assign		o_dpl				=		dpl_q;
+assign		o_dph				=		dph_q;
+assign		o_sx_0				=		sx_0_q;
+assign		o_sx_1				=		sx_1_q;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule
