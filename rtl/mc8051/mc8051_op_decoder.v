@@ -19,10 +19,56 @@ module op_decoder(
 	
 	output	reg	[`MCODE_WIDTH-1:0]		o_mc_b
 );
-localparam			BASIC_FILENAME	=	"MicroCodeTable.hex";
-reg		[63:0]		mcTable_rom	[0:255*4];
-initial
-		$readmemh(BASIC_FILENAME, mcTable_rom, 0,255*4);
-always @(*)
-	o_mc_b		=	mcTable_rom[{i_ci_stage,i_instr_buffer}];
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+`define                 SIMULATION_VE
+/*
+`define                 NO_SIMULATION
+*/
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+`ifdef SIMULATION_VE
+    if(i_ci_stage == 2'b00)
+        case(i_instr_buffer)
+            `NOP:   o_mc_b  =   
+
+            default:
+                begin
+                    o_mc_b  =   {`MCODE_WIDTH{1'bz}};
+                   $display ("%m :at time %t Warning! In ci_stage %d, fetched invalid op_code %h return 8'bzzzz_zzzz.", $time,	i_ci_stage, i_instr_buffer);
+                end
+        endcase
+    else if(i_ci_stage == 2'b01)
+        case(i_instr_buffer)
+
+            default:
+                begin
+                    o_mc_b  =   {`MCODE_WIDTH{1'bz}};
+                   $display ("%m :at time %t Warning! In ci_stage %d, fetched invalid op_code %h return 8'bzzzz_zzzz.", $time,	i_ci_stage, i_instr_buffer);
+                end
+        endcase
+    else if(i_ci_stage == 2'b10)
+        case(i_instr_buffer)
+
+            default:
+                begin
+                    o_mc_b  =   {`MCODE_WIDTH{1'bz}};
+                    $display ("%m :at time %t Warning! In ci_stage %d, fetched invalid op_code %h return 8'bzzzz_zzzz.", $time,	i_ci_stage, i_instr_buffer);
+                end
+        endcase
+    else
+        case(i_instr_buffer)
+
+            default:
+                begin
+                    o_mc_b  =   {`MCODE_WIDTH{1'bz}};
+                    $display ("%m :at time %t Warning! In ci_stage %d, fetched invalid op_code %h return 8'bzzzz_zzzz.", $time,	i_ci_stage, i_instr_buffer);                end
+        endcase
+`else
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+    localparam			BASIC_FILENAME	=	"MicroCodeTable.hex";
+    reg		[63:0]		mcTable_rom	[0:255*4];
+    initial
+            $readmemh(BASIC_FILENAME, mcTable_rom, 0,255*4);
+    always @(*)
+        o_mc_b		=	mcTable_rom[{i_ci_stage,i_instr_buffer}];
+`endif
 endmodule

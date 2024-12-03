@@ -12,26 +12,26 @@
 `timescale 				1ns/1ps
 `include				"global_param.v"
 module mc8051_top(
-	input					clk,
-	input					reset_n,
+	input					    clk,
+	input					    reset_n,
 
-	output					mem_we_n,
-	output					mem_rd_n,
-	output					mem_psen_n,
-	input					mem_data_rdy,
-	input	[7:0]			mem_rdata,
-	output	[7:0]			mem_wdata,
-	output	[15:0]			mem_addr,
+	output					    mem_we_n,
+	output					    mem_rd_n,
+	output					    mem_psen_n,
+	input					    mem_data_rdy,
+	input	[7:0]			    mem_rdata,
+	output	[7:0]			    mem_wdata,
+	output	[15:0]			    mem_addr,
 	
-	input					int_req_n,
-	output					int_ack_n,
-	input	[7:0]			int_so_num,
-	output					int_reti
+	input					    int_req_n,
+	output					    int_ack_n,
+	input	[7:0]			    int_so_num,
+	output					    int_reti
 );
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-wire		[3:0]			t_p_d;
-wire		[3:0]			t_p_q;
+wire		[3:0]			    t_p_d;
+wire		[3:0]			    t_p_q;
 
 wire							w_we_n;
 wire							w_rd_n;

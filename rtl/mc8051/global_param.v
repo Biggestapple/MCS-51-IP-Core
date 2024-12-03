@@ -358,5 +358,3 @@
 `define					S5_WR_PCL			4'h7
 `define					S5_WR_PCH			4'h8
 `define					S5_WR_SPM0			4'h9
-
-`define					IF_SIMULATE			1'b1

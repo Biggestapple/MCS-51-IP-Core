@@ -34,7 +34,7 @@ module biu(
 	input		[15:0]		i_s5_mem_addr_d,
 	
 	
-														//Naive-Memory Interface
+//Naive-Memory Interface
 	output		reg			mem_we_n,
 	output		reg			mem_rd_n,
 	output		reg			mem_psen_n,
