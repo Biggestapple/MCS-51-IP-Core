@@ -29,6 +29,7 @@
 `define					MOV_RN_IMM			8'b0111_1zzz
 `define					MOV_DIR_A			8'hF5
 `define					MOV_DIR1_DIR2		8'h85
+`define                 MOV_A_IMM           8'h74
 `define					MOV_DIR_F_RN		8'b1000_011z
 `define					MOV_DIR_IMM			8'h75
 `define					MOV_F_RN_A			8'b1111_011z
@@ -165,7 +166,7 @@
 `define					S4_0				4'd6
 `define					S4_1				4'd7
 `define					S5_0				4'd8
-`define					S5_1				4'd9,
+`define					S5_1				4'd9
 `define					S6_0				4'd10
 `define					S6_1				4'd11
 
@@ -183,7 +184,7 @@
 `define					INT_VECTOR_7		16'h003b
 								//Not used
 								
-`define					MCODE_WIDTH			24*2
+`define					MCODE_WIDTH			32*2
 `define					STACK_RESET			8'h07
 								//Basic 8051 Module
 `define					IRAM_SIZE			128
@@ -320,33 +321,35 @@
 `define					ALU_IN1_N1			3'h4
 `define					ALU_IN1_NU			3'h5
 //Define the s2_mem_addr_sel
-`define					S2_ADDR_RS			1'b0
-`define					S2_ADDR_PC			4'h8
-`define					S2_ADDR_INDX16		4'h9
-`define					S2_ADDR_INDX8		4'ha
-`define					S2_ADDR_DPTR		4'hb
-`define					S2_ADDR_DPTRPA		4'hc
-`define					S2_ADDR_PCPA		4'hd
-`define					S2_ADDR_BITM0		4'he
-`define					S2_ADDR_BITM1		4'hf
+`define                 S2_ADDR_RS0         4'h0
+`define					S2_ADDR_RS1 		4'h1
+`define					S2_ADDR_PC			4'h2
+`define					S2_ADDR_INDX16		4'h3
+`define					S2_ADDR_INDX8		4'h4
+`define					S2_ADDR_DPTR		4'h5
+`define                 S2_ADDR_DPTRPA      4'h6
+`define					S2_ADDR_PCPA		4'h7
+`define					S2_ADDR_BITM0		4'h8
+`define					S2_ADDR_BITM1		4'h9
 
 //Define the s3_mem_addr_sel
-`define					S3_ADDR_RS			2'b00
-`define					S3_ADDR_INDX8		3'h2
-`define					S3_ADDR_BITM1		3'h3
-`define					S3_ADDR_SINDX8		3'h4
-`define					S3_ADDR_PC			3'h5
-`define					S3_ADDR_SX			3'h6
-`define					S3_ADDR_SP			3'h7
-//Define the s6_mem_addr_sel
-`define					S5_ADDR_RS			1'b0
-`define					S5_ADDR_INDX8		4'h8
-`define					S5_ADDR_SINDX8		4'h9
-`define					S5_ADDR_INDX16		4'ha
-`define					S5_ADDR_BITM0		4'hb
-`define					S5_ADDR_BITM1		4'hc
-`define					S5_ADDR_SX			4'hd
-`define					S5_ADDR_SP			4'he
+`define					S3_ADDR_RS1			3'h0
+`define					S3_ADDR_INDX8		3'h1
+`define					S3_ADDR_BITM1		3'h2
+`define					S3_ADDR_SINDX8		3'h3
+`define					S3_ADDR_PC			3'h4
+`define					S3_ADDR_SX			3'h5
+`define					S3_ADDR_SP			3'h6
+//Define the s5_mem_addr_sel
+`define					S5_ADDR_RS0			4'h0
+`define                 S5_ADDR_RS1         4'h1
+`define					S5_ADDR_INDX8		4'h2
+`define					S5_ADDR_SINDX8		4'h3
+`define					S5_ADDR_INDX16		4'h4
+`define					S5_ADDR_BITM0		4'h5
+`define					S5_ADDR_BITM1		4'h6
+`define					S5_ADDR_SX			4'h7
+`define					S5_ADDR_SP			4'h8
 //Define the mem_wdata_sel
 `define					S5_WR_S2B			4'h0
 `define					S5_WR_S3B			4'h1
