@@ -99,6 +99,9 @@ module	mc51_cu(
 	output		[3:0]		o_t_p_d,
 	output		[3:0]		o_t_p_q,
 	output		[1:0]		o_ci_stage,
+    output                  o_s1_done_tick,
+    output                  o_s2_done_tick,
+    output                  o_s3_done_tick,
 //	ci: current instruction stage
 	output		[7:0]		o_pcl,
 	output		[7:0]		o_pch,
@@ -228,17 +231,12 @@ always @(*) begin
 
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-always @(posedge clk or negedge reset_n)
-	if(~reset_n) begin
-		s3_addr_truncat	<=	'h0;
-		s2_addr_truncat	<=	'h0;
-		s6_addr_truncat	<=	'h0;
-	end else begin
-		s2_addr_truncat	<=	i_s2_mem_addr_d[7:0];
-		s3_addr_truncat	<=	i_s3_mem_addr_d[7:0];
-		s6_addr_truncat	<=	i_s5_mem_addr_d[7:0];
-	end
-
+always @(*) begin
+		s2_addr_truncat	=	i_s2_mem_addr_d[7:0];
+		s3_addr_truncat	=	i_s3_mem_addr_d[7:0];
+		s6_addr_truncat	=	i_s5_mem_addr_d[7:0];
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(posedge clk or negedge reset_n)
 	if(~reset_n)
 		t_p_q			<=	`S1_0;
@@ -263,7 +261,35 @@ task s2_where_to_go(
 	endcase
 endtask
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-always @(*) begin
+task s3_where_to_go(
+	input	[2:0]	i_s3_fetch_mode_sel,
+	output	[3:0]	t_p_d
+	);
+	case(i_s3_fetch_mode_sel)
+		`DISCARD_MODE	:		t_p_d	=	`S4_0;
+		`IND_EXROM_MODE,
+		`IND_EXRAM_MODE,
+		`IND_IRAM_MODE,
+		`DIR_IRAM_MODE	:		t_p_d	=	`S3_0;
+		default: begin
+					$display ("%m :at time %t Error: Fetched INVALID MCCODE during S2 in cu_module.", $time);
+					t_p_d	=	`S8_HALT_LOOP;
+				end
+	endcase
+endtask
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)        s1_instr_buffer_q       <=  8'bzzzz_zzzz;
+    else                s1_instr_buffer_q       <=  s1_instr_buffer_d;
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)        s2_data_buffer_q        <=  8'bzzzz_zzzz;
+    else                s2_data_buffer_q        <=  s2_data_buffer_d;
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)        s3_data_buffer_q        <=  8'bzzzz_zzzz;
+    else                s3_data_buffer_q        <=  s3_data_buffer_d;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(t_p_q or sfr_rd_temp or i_data_rdy
+        or int_req_n or i_alu_ready or sfr_rd_temp) begin
 	t_p_d				=	t_p_q;
 	
 	is_s2_fetch_sfr		=	1'b0;
@@ -291,28 +317,32 @@ always @(*) begin
 		`S1_0:				// Beside getting the current instruction 
 							// in s1 ~s2 phase,we should generate the next PC value (address)...
 			begin
-				rd_n		=	1'b0;
-				psen_n		=	1'b0;
+				rd_n		        =	1'b0;
+				psen_n		        =	1'b0;
+                s1_instr_buffer_d	=	i_mem_rdata;
 				
-				t_p_d		=	`S2_0;
+				t_p_d		        =	`S1_1;
 			end
 		`S1_1:
 			begin
-				rd_n		=	1'b0;
-				psen_n		=	1'b0;
-				
+                            // Tricky Bugs Here !!!
+				rd_n		        =	1'b0;
+				psen_n		        =	1'b0;
+                s1_instr_buffer_d	=	i_mem_rdata;
 				if(multi_cycle_times	!=	2'b00) begin
 					s1_done_tick		=	1'b0;
 							// PC value shouldn't update
 					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
 				end else if(i_data_rdy) begin
+/*
 					rd_n		=	1'b1;
 					psen_n		=	1'b1;
+*/
 					s1_done_tick		=	1'b1;
-					s1_instr_buffer_d	=	i_mem_rdata;
+//					s1_instr_buffer_d	=	i_mem_rdata;
 					
 					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
-				end
+                end
 			end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 			`S2_0:
@@ -340,7 +370,10 @@ always @(*) begin
 									s2_data_buffer_d		=	iram[s2_addr_truncat];
 							//Access to NORMAL_SPACE
 								end
-								t_p_d	=	`S3_0;
+/*
+                                t_p_d	=	`S3_0;
+*/
+                                s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
 							end
 						default:
 							begin 
@@ -355,6 +388,8 @@ always @(*) begin
 						psen_n		=	1'b1;
 						s2_data_buffer_d	=	i_mem_rdata;
 						s2_done_tick		=	1'b1;
+                        s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
+/*
 						case(i_s3_fetch_mode_sel)
 							`DISCARD_MODE	:		t_p_d	=	`S4_0;
 							`IND_EXROM_MODE,
@@ -366,7 +401,7 @@ always @(*) begin
 								t_p_d	=	`S8_HALT_LOOP;
 							end
 						endcase
-						
+*/						
 					end else begin
 							//Understanding ... ... ?
 						rd_n		=	1'b0;
@@ -437,6 +472,7 @@ always @(*) begin
 									$display ("%m :at time %t Error: Write INVALID DATA in cu_module. (Not supporting in 8051 system)", $time);
 								else
 									is_s6_wr_sfr	=	1'b1;
+                                
 								t_p_d			=	`S6_0;
 							end else begin
 							//Write back to NORMAL_SPACE
@@ -458,8 +494,9 @@ always @(*) begin
 					if(i_data_rdy) begin
 						we_n	=	1'b1;
 						t_p_d	=	`S6_0;
-					end else
+                    end else begin
 						we_n	=	1'b0;
+                    end
 				end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 			`S6_0:
@@ -508,7 +545,7 @@ always @(posedge clk or negedge reset_n)
 		{pch_q,pcl_q}	<=	{pch_d,pcl_d};
 
 always @(*) begin
-	{pch_q,pcl_q}	=	{pch_d,pcl_d};
+	{pch_d,pcl_d}	=	{pch_q,pcl_q};
 	if(	(s1_done_tick						)|
 		(s2_done_tick && i_is_s2_update_pc	)|
 		(s3_done_tick && i_is_s3_update_pc	)
@@ -520,8 +557,8 @@ always @(*) begin
 			case(i_pc_reload_mode_sel)
 				`PC_NUL_RELOAD		:		{pch_d,pcl_d}	=	{pch_q,pcl_q};
 				`PC_11B_RELOAD		:		{pch_d,pcl_d}	=	{{pch_q[7:3],s1_instr_buffer_q[7:5]},s2_data_buffer_q};
-				`PC_ROF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8{s2_data_buffer_q[7]},s2_data_buffer_q};
-				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8{s3_data_buffer_q[7]},s3_data_buffer_q};
+				`PC_ROF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8*{s2_data_buffer_q[7]},s2_data_buffer_q};
+				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8*{s3_data_buffer_q[7]},s3_data_buffer_q};
 							//Won't use alu module for simplicity
 				`PC_IND_RELOAD		:		{pch_d,pcl_d}	=	{8'b0,acc_q	}	+	{dph_q,	dpl_q};
 				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s2_data_buffer_q,	s2_data_buffer_q};
@@ -663,5 +700,8 @@ assign		o_dpl				=		dpl_q;
 assign		o_dph				=		dph_q;
 assign		o_sx_0				=		sx_0_q;
 assign		o_sx_1				=		sx_1_q;
+assign      o_s1_done_tick      =       s1_done_tick;
+assign      o_s2_done_tick      =       s2_done_tick;
+assign      o_s3_done_tick      =       s3_done_tick;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule
