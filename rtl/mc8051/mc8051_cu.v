@@ -289,7 +289,7 @@ always @(posedge clk or negedge reset_n)
     else                s3_data_buffer_q        <=  s3_data_buffer_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(t_p_q or sfr_rd_temp or i_data_rdy
-        or int_req_n or i_alu_ready or sfr_rd_temp) begin
+        or int_req_n or i_alu_ready or i_s2_fetch_mode_sel) begin
 	t_p_d				=	t_p_q;
 	
 	is_s2_fetch_sfr		=	1'b0;
@@ -328,7 +328,8 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
                             // Tricky Bugs Here !!!
 				rd_n		        =	1'b0;
 				psen_n		        =	1'b0;
-                s1_instr_buffer_d	=	i_mem_rdata;
+//              s1_instr_buffer_d	=	i_mem_rdata;
+                s1_instr_buffer_d   =   (multi_cycle_times == 2'b00 )   ?   i_mem_rdata :   s1_instr_buffer_q;
 				if(multi_cycle_times	!=	2'b00) begin
 					s1_done_tick		=	1'b0;
 							// PC value shouldn't update
