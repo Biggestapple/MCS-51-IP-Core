@@ -326,11 +326,12 @@
 `define					S2_ADDR_PC			4'h2
 `define					S2_ADDR_INDX16		4'h3
 `define					S2_ADDR_INDX8		4'h4
-`define					S2_ADDR_DPTR		4'h5
-`define                 S2_ADDR_DPTRPA      4'h6
-`define					S2_ADDR_PCPA		4'h7
-`define					S2_ADDR_BITM0		4'h8
-`define					S2_ADDR_BITM1		4'h9
+`define                 S2_ADDR_SINDX8      4'h5
+`define					S2_ADDR_DPTR		4'h6
+`define                 S2_ADDR_DPTRPA      4'h7
+`define					S2_ADDR_PCPA		4'h8
+`define					S2_ADDR_BITM0		4'h9
+`define					S2_ADDR_BITM1		4'ha
 
 //Define the s3_mem_addr_sel
 `define					S3_ADDR_RS1			3'h0

@@ -545,8 +545,8 @@ always @(*) begin
 			case(i_pc_reload_mode_sel)
 				`PC_NUL_RELOAD		:		{pch_d,pcl_d}	=	{pch_q,pcl_q};
 				`PC_11B_RELOAD		:		{pch_d,pcl_d}	=	{{pch_q[7:3],s1_instr_buffer_q[7:5]},s2_data_buffer_q};
-				`PC_ROF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8*{s2_data_buffer_q[7]},s2_data_buffer_q};
-				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{8*{s3_data_buffer_q[7]},s3_data_buffer_q};
+				`PC_ROF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{{8{s2_data_buffer_q[7]}},s2_data_buffer_q};
+				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{{8{s3_data_buffer_q[7]}},s3_data_buffer_q};
 							//Won't use alu module for simplicity
 				`PC_IND_RELOAD		:		{pch_d,pcl_d}	=	{8'b0,acc_q	}	+	{dph_q,	dpl_q};
 				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s2_data_buffer_q,	s2_data_buffer_q};

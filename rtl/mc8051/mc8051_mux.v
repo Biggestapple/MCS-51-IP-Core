@@ -72,6 +72,7 @@ assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w
 							//Fetch the next op_code
 								(i_s2_mem_addr_sel		==	`S2_ADDR_INDX16	)	?	{i_s3_data_buffer,i_s2_data_buffer}			    :
 								(i_s2_mem_addr_sel		==	`S2_ADDR_INDX8	)	?	{8'b0,i_s2_data_buffer}						    :
+								(i_s2_mem_addr_sel		==	`S2_ADDR_SINDX8	)	?	{8'b0,i_s3_data_buffer}						    :
 							//MOVX A,@DPTR
 								(i_s2_mem_addr_sel		==	`S2_ADDR_DPTR	)	?	{i_dph,i_dpl}								    :
                                 (i_s2_mem_addr_sel      ==  `S2_ADDR_DPTRPA )   ?   {i_dph,i_dpl}       +   i_acc                   :					
