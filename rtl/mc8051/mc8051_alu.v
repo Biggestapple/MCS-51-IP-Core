@@ -43,8 +43,9 @@ wire			alu_active_d0	=	i_t_p_d == `S4_0;
 reg				alu_active_d1;
 reg				[4:0]		alu_mode;
 reg				[7:0]		alu_in0_temp,alu_in1_temp,alu_bin0_temp,alu_bin1_temp;
-reg				alu_ready;
-reg				psw_temp;
+reg             alu_ready_d0,alu_ready_d1;
+wire            alu_ready       =   alu_ready_d1; 
+reg				[7:0]       psw_temp;
 reg				alu_bfet_bit_q;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 							//Interesting gramma ... ...
@@ -53,7 +54,7 @@ always @(posedge clk or negedge reset_n)
 	if(~reset_n)			alu_active_d1	<=	1'b0;
 	else					alu_active_d1	<=	alu_active_d0;
 always @(posedge clk or negedge reset_n)
-	if(~reset_n)			alu_mode		<=	`ALU_IDLE;
+	if(~reset_n)			alu_mode		<=	`ALU_IDLE_0;
 	else if(alu_active_d0)	alu_mode		<=	i_alu_mode;
 always @(posedge clk or negedge reset_n)
 	if(~reset_n)			alu_bin0_temp	<=	8'bzzzz_zzzz;
@@ -139,7 +140,7 @@ reg						alu_da_cy_w;
 		if(~reset_n)
 			{alu_mul_req_d1,alu_mul_req_d0}			<=		2'b00;
 		else
-			{alu_mul_req_d1,alu_mul_req_d0}			<=		{alu_mul_req_d0,alu_mul_req}	
+			{alu_mul_req_d1,alu_mul_req_d0}			<=		{alu_mul_req_d0,alu_mul_req};	
 	wire	alu_mul_req_pos		=		{alu_mul_req_d1,alu_mul_req_d0}	==	2'b01;
 	
 	always @(posedge clk or negedge reset_n)
@@ -165,7 +166,7 @@ reg						alu_da_cy_w;
 							//IDLE_STATE
 				2'b01:
 					if(alu_mul_bcnt[3]	==	1'b1) begin
-						alu_mul_bcnt		<=	4'h00;
+						alu_mul_bcnt		<=	4'h0;
 						alu_mul_rdy			<=	1'b1;
 						alu_mul_state		<=	2'b10;
 						
@@ -174,7 +175,7 @@ reg						alu_da_cy_w;
 						else
 							alu_mul_ov		<=	1'b0;
 					end else begin
-						alu_mul_temp0		<=	(alu_in1_temp[alu_mul_bcnt])	?	alu_mul_temp1 +	alu_mul_temp0 :alu_mul_temp0;
+						alu_mul_temp0		<=	(alu_in0_temp[alu_mul_bcnt])	?	alu_mul_temp1 +	alu_mul_temp0 :alu_mul_temp0;
 						alu_mul_temp1		<=	alu_mul_temp1	<<	1;
 						alu_mul_bcnt		<=	alu_mul_bcnt +	1'b1;
 						alu_mul_state		<=	2'b01;
@@ -205,7 +206,7 @@ reg						alu_da_cy_w;
 		if(~reset_n)
 			{alu_div_req_d1,alu_div_req_d0}			<=		2'b00;
 		else
-			{alu_div_req_d1,alu_div_req_d0}			<=		{alu_div_req_d0,alu_div_req}	
+			{alu_div_req_d1,alu_div_req_d0}			<=		{alu_div_req_d0,alu_div_req};
 	wire	alu_div_req_pos		=		{alu_div_req_d1,alu_div_req_d0}	==	2'b01;
 	
 	
@@ -219,7 +220,7 @@ reg						alu_da_cy_w;
 			alu_div_rdy			<=	1'b0;
 			alu_div_state		<=	2'b00;
 		end else
-			case(alu_mul_state)
+			case(alu_div_state)
 				2'b00:
 					if(alu_div_req_pos) begin
 							//Reload everything here
@@ -239,7 +240,7 @@ reg						alu_da_cy_w;
 						alu_div_ov			<=	1'b1;
 					end else begin
 						if(alu_div_temp2	>=	alu_in1_temp) begin
-							alu_div_temp2	<=	alu_div_temp2	+	alu_in1_ctemp;
+							alu_div_temp2	<=	alu_div_temp2	+	{1'b1,alu_in1_ctemp};
 							alu_div_temp0	<=	alu_div_temp0 	+ 	1'b1;
 						end else begin
 							alu_div_temp1	<=	alu_div_temp2;
@@ -481,10 +482,12 @@ end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(posedge clk or negedge reset_n)
 	if(~reset_n) begin
-		alu_ready						<=	1'b0;
+		alu_ready_d0                    <=	1'b0;
+        alu_ready_d1                    <=  1'b0;
 		psw_temp						<=	8'bzzzz_zzzz;
 	end else begin
-		alu_ready						<=	calc_done_q;
+		alu_ready_d0				    <=	calc_done_q;
+        alu_ready_d1                    <=  alu_ready_d0;
 		if(calc_done_q)
 			case(i_op_psw_mode)
 				`PSW_M0_RELOAD:	psw_temp	<=	i_psw;

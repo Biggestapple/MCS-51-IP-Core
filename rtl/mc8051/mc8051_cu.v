@@ -170,7 +170,7 @@ reg		[7:0]		psw_d;
 reg		[1:0]		multi_cycle_times;
 reg		[7:0]		s3_addr_truncat;
 reg		[7:0]		s2_addr_truncat;
-reg		[7:0]		s6_addr_truncat;
+reg		[7:0]		s5_addr_truncat;
 
 reg					s1_done_tick;
 reg					s2_done_tick;
@@ -199,11 +199,11 @@ always @(posedge clk or negedge reset_n)
 		int_so_num						<=		i_int_so_num;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 							//Just SDRAM type
-reg					is_s6_wr_iram;
-reg					is_s6_wr_sfr;
+reg					is_s5_wr_iram;
+reg					is_s5_wr_sfr;
 always @(posedge clk)
-	if(is_s6_wr_iram)
-		iram[s6_addr_truncat]			<=		i_mem_wdata;
+	if(is_s5_wr_iram)
+		iram[s5_addr_truncat]			<=		i_mem_wdata;
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 reg		[7:0]		sfr_rd_temp;
@@ -234,7 +234,7 @@ end
 always @(*) begin
 		s2_addr_truncat	=	i_s2_mem_addr_d[7:0];
 		s3_addr_truncat	=	i_s3_mem_addr_d[7:0];
-		s6_addr_truncat	=	i_s5_mem_addr_d[7:0];
+		s5_addr_truncat	=	i_s5_mem_addr_d[7:0];
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(posedge clk or negedge reset_n)
@@ -294,8 +294,8 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 	
 	is_s2_fetch_sfr		=	1'b0;
 	is_s3_fetch_sfr		=	1'b0;
-	is_s6_wr_iram		=	1'b0;
-	is_s6_wr_sfr		=	1'b0;
+	is_s5_wr_iram		=	1'b0;
+	is_s5_wr_sfr		=	1'b0;
 	
 	psen_n				=	1'b1;
 	we_n				=	1'b1;
@@ -390,19 +390,6 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 						s2_data_buffer_d	=	i_mem_rdata;
 						s2_done_tick		=	1'b1;
                         s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
-/*
-						case(i_s3_fetch_mode_sel)
-							`DISCARD_MODE	:		t_p_d	=	`S4_0;
-							`IND_EXROM_MODE,
-							`IND_EXRAM_MODE,
-							`IND_IRAM_MODE,
-							`DIR_IRAM_MODE	:		t_p_d	=	`S3_0;
-							default: begin
-								$display ("%m :at time %t Error: Fetched INVALID MCCODE during S2 in cu_module.", $time);
-								t_p_d	=	`S8_HALT_LOOP;
-							end
-						endcase
-*/						
 					end else begin
 							//Understanding ... ... ?
 						rd_n		=	1'b0;
@@ -468,17 +455,17 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 					`WR_DISCARD_MODE	:	t_p_d		=	`S6_0;
 					`WR_IND_2IRAM_MODE	,
 					`WR_DIR_2IRAM_MODE	:	begin
-							if(s6_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
+							if(s5_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
 								if(i_s5_write_mode_sel	==	`WR_IND_2IRAM_MODE	)
 									$display ("%m :at time %t Error: Write INVALID DATA in cu_module. (Not supporting in 8051 system)", $time);
 								else
-									is_s6_wr_sfr	=	1'b1;
+									is_s5_wr_sfr	=	1'b1;
                                 
 								t_p_d			=	`S6_0;
 							end else begin
 							//Write back to NORMAL_SPACE
 								t_p_d			=	`S6_0;
-								is_s6_wr_iram	=	1'b1;
+								is_s5_wr_iram	=	1'b1;
 							end
 						end
 					`WR_2EXRAM_MODE		:	begin
@@ -621,9 +608,9 @@ always @(posedge clk or negedge reset_n)
 					$display ("%m :at time %t Warning PC register may hit the boundary causing unpredictable action.", $time);
 				end
 			endcase
-		else if(t_p_d	==	`S5_1	&&	is_s6_wr_iram)
+		else if(t_p_q	==	`S5_0	&&	is_s5_wr_sfr)
 							//Write back to sfr_space
-			case(s6_addr_truncat)
+			case(s5_addr_truncat)
 				`ACC	:		acc_q		<=		i_mem_wdata;
 				`B		:		b_q			<=		i_mem_wdata;
 				`SP		:		sp_q		<=		i_mem_wdata;

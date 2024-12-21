@@ -201,8 +201,8 @@
 //Define the write mode for S5
 `define					WR_DISCARD_MODE		3'h0
 `define					WR_IND_2IRAM_MODE	3'h1
-`define					WR_DIR_2IRAM_MODE	3'h1
-`define					WR_2EXRAM_MODE		3'h2
+`define					WR_DIR_2IRAM_MODE	3'h2
+`define					WR_2EXRAM_MODE		3'h3
 
 `define					PCL_RESET			8'h00
 `define					PCH_RESET			8'h00
@@ -314,12 +314,12 @@
 `define					ALU_I0_SX0			3'h6
 `define					ALU_I0_SX1			3'h7
 //Define the alu_in1_sel
-`define					ALU_IN1_S2B			3'h0
-`define					ALU_IN1_S3B			3'h1
-`define					ALU_IN1_BX			3'h2
-`define					ALU_IN1_P1			3'h3
-`define					ALU_IN1_N1			3'h4
-`define					ALU_IN1_NU			3'h5
+`define					ALU_I1_S2B			3'h0
+`define					ALU_I1_S3B			3'h1
+`define					ALU_I1_BX			3'h2
+`define					ALU_I1_P1			3'h3
+`define					ALU_I1_N1			3'h4
+`define					ALU_I1_NU			3'h5
 //Define the s2_mem_addr_sel
 `define                 S2_ADDR_RS0         4'h0
 `define					S2_ADDR_RS1 		4'h1

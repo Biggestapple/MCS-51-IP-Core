@@ -58,12 +58,12 @@ assign		o_alu_in0		=	(i_alu_in0_sel			== 	`ALU_I0_ACC		)	?		i_acc									    :
 								(i_alu_in0_sel          ==  `ALU_I0_SX1     )   ?       i_sx_1                                      :
                                 8'bzzzz_zzzz;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-assign		o_alu_in1		=	(i_alu_in1_sel			==	`ALU_IN1_S2B	)	?		i_s2_data_buffer	                        :
-								(i_alu_in1_sel			==	`ALU_IN1_S3B	)	?		i_s3_data_buffer	                        :
-								(i_alu_in1_sel			==	`ALU_IN1_BX		) 	?		i_bx				                        :
-								(i_alu_in1_sel			==	`ALU_IN1_P1		) 	?		8'h01				                        :
-								(i_alu_in1_sel			==	`ALU_IN1_N1		) 	?		8'hff				                        :
-								(i_alu_in1_sel			==	`ALU_IN1_NU		) 	?		8'h00				                        :		
+assign		o_alu_in1		=	(i_alu_in1_sel			==	`ALU_I1_S2B	    )	?		i_s2_data_buffer	                        :
+								(i_alu_in1_sel			==	`ALU_I1_S3B	    )	?		i_s3_data_buffer	                        :
+								(i_alu_in1_sel			==	`ALU_I1_BX		) 	?		i_bx				                        :
+								(i_alu_in1_sel			==	`ALU_I1_P1		) 	?		8'h01				                        :
+								(i_alu_in1_sel			==	`ALU_I1_N1		) 	?		8'hff				                        :
+								(i_alu_in1_sel			==	`ALU_I1_NU		) 	?		8'h00				                        :		
                                 8'bzzzz_zzzz;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w	+	i_s1_instr_buffer[2:0]}		    :
