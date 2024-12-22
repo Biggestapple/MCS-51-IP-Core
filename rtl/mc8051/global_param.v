@@ -336,11 +336,12 @@
 //Define the s3_mem_addr_sel
 `define					S3_ADDR_RS1			3'h0
 `define					S3_ADDR_INDX8		3'h1
-`define					S3_ADDR_BITM1		3'h2
-`define					S3_ADDR_SINDX8		3'h3
-`define					S3_ADDR_PC			3'h4
-`define					S3_ADDR_SX			3'h5
-`define					S3_ADDR_SP			3'h6
+`define                 S3_ADDR_BITM0       3'h2
+`define					S3_ADDR_BITM1		3'h3
+`define					S3_ADDR_SINDX8		3'h4
+`define					S3_ADDR_PC			3'h5
+`define					S3_ADDR_SX			3'h6
+`define					S3_ADDR_SP			3'h7
 //Define the s5_mem_addr_sel
 `define					S5_ADDR_RS0			4'h0
 `define                 S5_ADDR_RS1         4'h1

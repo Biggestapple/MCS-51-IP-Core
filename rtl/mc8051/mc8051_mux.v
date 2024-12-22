@@ -86,6 +86,7 @@ assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 assign		o_s3_mem_addr_d	=	(i_s3_mem_addr_sel      ==	`S3_ADDR_RS1    )	?	{8'b0,		r0_w	+	i_s1_instr_buffer[0]}	:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_INDX8	)	?	{8'b0,i_s2_data_buffer}							:
+								(i_s3_mem_addr_sel		==	`S3_ADDR_BITM0	)	?	i_s2_data_buffer[7:3] + 16'h20				    :
 								(i_s3_mem_addr_sel		==	`S3_ADDR_BITM1	)	?	{8'b0,i_s2_data_buffer[7:3],3'b000}				:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_SINDX8	)	?	{8'b0,i_s3_data_buffer}							:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_PC		)	?	{i_pch,i_pcl}								    :

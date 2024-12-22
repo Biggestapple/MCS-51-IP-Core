@@ -428,7 +428,7 @@ always @(*) begin
 			`ALU_LOG_CPB:
 				begin
 					alu_o0_temp_d		=	alu_bin1_temp	&	~((8'h01 << alu_bin0_temp[2:0]) & alu_bin1_temp[alu_bin0_temp[2:0]]);
-					
+					calc_done_d         =   1'b1;
 				end
 			`ALU_LOG_CPC:
 				begin
@@ -456,15 +456,15 @@ always @(*) begin
 					cy_d				=	cy_c	|	~alu_bfet_bit_q;
 					
 				end
-			`ALU_LOG_STB:
+			`ALU_LOG_STC:
 				begin
 					calc_done_d			=	1'b1;
 					cy_d				=	1'b1;
 				end
-			`ALU_LOG_STC:
+			`ALU_LOG_STB:
 				begin
 					calc_done_d			=	1'b1;
-					cy_d				=	alu_bin1_temp	|	(8'h01 << alu_bin0_temp[2:0]);
+					alu_o0_temp_d       =	alu_bin1_temp	|	(8'h01 << alu_bin0_temp[2:0]);
 				end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 			`ALU_INCDPTR:

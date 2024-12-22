@@ -69,6 +69,17 @@ module op_decoder(
                 `JZ             :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCZER,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
                 `JNZ            :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCNZE,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+/*
+                LOGICAL OPERATION
+*/
+                `RRC_A          :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_ACC_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M1_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_ARI_RRC,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+/*
+                BOOLEAN VERIABLE MANIPULATION
+*/
+                `SETB_C         :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M1_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_LOG_STC,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+                `SETB_BIT       :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_SX0_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M1_RELOAD,`ALU_I1_S3B,`ALU_I0_S2B,`ALU_LOG_STB,`S5_ADDR_BITM0,`WR_DIR_2IRAM_MODE,`S5_WR_SX0,`S3_ADDR_BITM0,`DIR_IRAM_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
                 default:
                     begin
                         o_mc_b  =   {`MCODE_WIDTH{1'bz}};
