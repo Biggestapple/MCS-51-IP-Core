@@ -85,6 +85,7 @@ module op_decoder(
 */
                 `JZ             :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCZER,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
                 `JNZ            :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCNZE,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
+                `LCALL          :   o_mc_b  =   {1'b1,`FROM_A_TEMP,`TO_SP_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_P1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_PCL,`S3_ADDR_PC,`IND_EXROM_MODE,1'b1,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 /*
                 LOGICAL OPERATION
@@ -115,6 +116,8 @@ module op_decoder(
                 `DIV_AB         :   o_mc_b  =   {1'b0,`FROM_B_TEMP,`TO_BX_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};   
 
                 `PUSH           :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_S3B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+
+                `LCALL          :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_SP_REG,`PC_16B_RELOAD,`JP_NOCOND,`PSW_M0_RELOAD,`ALU_I1_P1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_PCH,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
 
                 default:
                     begin
