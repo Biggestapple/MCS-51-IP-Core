@@ -22,6 +22,7 @@ module biu(
 	input					i_we_n,
 	input					i_rd_n,
 	input					i_psen_n,
+    input                   i_peri_sfr_req,
 	output		reg			o_data_rdy,
 	output	reg	[7:0]		o_mem_rdata,
 	
@@ -35,6 +36,7 @@ module biu(
 	
 	
 //Naive-Memory Interface
+    output      reg         mem_sfr_n,
 	output		reg			mem_we_n,
 	output		reg			mem_rd_n,
 	output		reg			mem_psen_n,
@@ -50,9 +52,9 @@ always @(posedge clk or negedge reset_n)
 	else begin
 		if		(i_t_p_d	==	`S1_0	)
 			mem_addr		<=	{i_pch,	i_pcl};
-		else if	(i_t_p_d	==	`S2_0	)
+		else if	(i_t_p_q	==	`S2_0	)
 			mem_addr		<=	i_s2_mem_addr_d;
-		else if	(i_t_p_d	==	`S3_0	)
+		else if	(i_t_p_q	==	`S3_0	)
 			mem_addr		<=	i_s3_mem_addr_d;
 		else if	(i_t_p_d	==	`S5_0	)
 			mem_addr		<=	i_s5_mem_addr_d;
@@ -60,7 +62,7 @@ always @(posedge clk or negedge reset_n)
 			mem_addr		<=	mem_addr;
 	end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-always @(posedge clk oe negedge reset_n)
+always @(posedge clk or negedge reset_n)
 	if(~reset_n)
 		mem_wdata			<=	8'bzzzz_zzzz;
 	else if(i_t_p_d	==	`S5_0	)
@@ -69,6 +71,7 @@ always @(posedge clk oe negedge reset_n)
 		mem_wdata			<=	mem_wdata;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(*) begin
+        mem_sfr_n           =   ~i_peri_sfr_req;
 		mem_we_n			=	i_we_n;
 		mem_rd_n			=	i_rd_n;
 		mem_psen_n			=	i_psen_n;

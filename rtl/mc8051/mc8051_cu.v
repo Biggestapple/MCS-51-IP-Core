@@ -20,6 +20,7 @@
 //			Biggest_apple				2024.11.18		Completed the J_Group instruction and interrupt function
 //			Biggest_apple				2024.11.19		All Done Great !
 //			Biggest_apple				2024.11.21		Bit Addressing still has problems (No problem actually )
+//          Biggest_apple               2024.12.24      Added peripheral sfr control logic
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 `timescale 				1ns/1ps
 `include				"global_param.v"
@@ -120,6 +121,7 @@ module	mc51_cu(
 	output					o_we_n,
 	output					o_rd_n,
 	output					o_psen_n,
+    output                  o_peri_sfr_req,
 	input					i_data_rdy,
 //	Interrput control interface
 	input					i_int_req_n,
@@ -143,12 +145,14 @@ reg		[7:0]		sx_1_d;
 reg					psen_n;
 reg					we_n;
 reg					rd_n;
+reg                 peri_sfr_req_q;
+reg                 peri_sfr_req_d;
 							//Timing-phase counter
 reg		[3:0]		t_p_q;
 reg		[3:0]		t_p_d;
 							//Internal ram block define
 reg		[7:0]		iram	[0:	`IRAM_SIZE -1];
-							//Define special function register
+							//Define special function register There are kernel-related register
 reg		[7:0]		pcl_d;
 reg		[7:0]		pcl_q;
 reg		[7:0]		pch_q;
@@ -243,6 +247,27 @@ always @(posedge clk or negedge reset_n)
 	else
 		t_p_q			<=	t_p_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(posedge clk or negedge reset_n) begin
+    if(~reset_n)
+        peri_sfr_req_q       <=  1'b0;
+    else
+        peri_sfr_req_q       <=  peri_sfr_req_d;
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+reg                 is_rd_periCtrl_sfr;
+always @(*)
+    case(sfr_addr)
+        `ACC,`B,`SP,`DPL,`DPH,`PSW	:   is_rd_periCtrl_sfr =   1'b0;
+        default                     :   is_rd_periCtrl_sfr =   1'b1;
+    endcase
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+reg                 is_wr_periCtrl_sfr;
+always @(*)
+    case(s5_addr_truncat)
+        `ACC,`B,`SP,`DPL,`DPH,`PSW	:   is_wr_periCtrl_sfr =   1'b0;
+        default                     :   is_wr_periCtrl_sfr =   1'b1;
+    endcase
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 task s2_where_to_go(
 	input	[2:0]	i_s2_fetch_mode_sel,
 	output	[3:0]	t_p_d
@@ -289,7 +314,7 @@ always @(posedge clk or negedge reset_n)
     else                s3_data_buffer_q        <=  s3_data_buffer_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(t_p_q or sfr_rd_temp or i_data_rdy
-        or int_req_n or i_alu_ready or i_s2_fetch_mode_sel) begin
+        or int_req_n or i_alu_ready or i_s2_fetch_mode_sel or i_mem_rdata) begin
 	t_p_d				=	t_p_q;
 	
 	is_s2_fetch_sfr		=	1'b0;
@@ -300,6 +325,7 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 	psen_n				=	1'b1;
 	we_n				=	1'b1;
 	rd_n				=	1'b1;
+    peri_sfr_req_d      =   peri_sfr_req_q;
 	
 	s1_instr_buffer_d	=	s1_instr_buffer_q;
 	s2_data_buffer_d	=	s2_data_buffer_q;
@@ -359,22 +385,31 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 						`DIR_IRAM_MODE:begin
 								if(s2_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
 							//Access to SFR_SPACE or Unexist space
-									if(i_s2_fetch_mode_sel	==	`IND_IRAM_MODE	)
+									if(i_s2_fetch_mode_sel	==	`IND_IRAM_MODE	) begin
 										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
-									else begin
-										is_s2_fetch_sfr		=	1'b1;
-										s2_data_buffer_d	=	sfr_rd_temp;
+                                        t_p_d                   =   `S8_HALT_LOOP;
+                                    end else begin
+                                        if(is_rd_periCtrl_sfr   ) begin
+                                            rd_n                =   1'b0;
+                                            t_p_d               =   `S2_1;
+                                            peri_sfr_req_d      =   1'b1;
+                                        end else begin
+                                            is_s2_fetch_sfr		=	1'b1;
+                                            s2_data_buffer_d	=	sfr_rd_temp;
+                                            s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
+                                        end
 									end
 							//How to fetch data from SFR_SPACE ... ...
 							//Note here not finish yet ... ...
 								end else begin
 									s2_data_buffer_d		=	iram[s2_addr_truncat];
 							//Access to NORMAL_SPACE
+                                    s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
 								end
 /*
                                 t_p_d	=	`S3_0;
 */
-                                s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
+//                              s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
 							end
 						default:
 							begin 
@@ -385,8 +420,9 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 			`S2_1:
 				begin
 					if(i_data_rdy) begin
-						rd_n		=	1'b1;
-						psen_n		=	1'b1;
+						rd_n		        =	1'b1;
+						psen_n		        =	1'b1;
+                        peri_sfr_req_d      =   1'b0;
 						s2_data_buffer_d	=	i_mem_rdata;
 						s2_done_tick		=	1'b1;
                         s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
@@ -411,19 +447,28 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 						`DIR_IRAM_MODE:begin
 								if(s3_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
 							//Access to SFR_SPACE or Unexist space
-									if(i_s3_fetch_mode_sel	==	`IND_IRAM_MODE	)
+									if(i_s3_fetch_mode_sel	==	`IND_IRAM_MODE	) begin
 										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
-									else begin
-										is_s3_fetch_sfr		=	1'b1;
-										s3_data_buffer_d	=	sfr_rd_temp;
+                                        t_p_d	                =	`S4_0;
+                                    end else begin
+                                        if(is_rd_periCtrl_sfr) begin
+                                            rd_n                =   1'b0;
+                                            t_p_d               =   `S3_1;
+                                            peri_sfr_req_d      =   1'b1;
+                                        end else begin
+										    is_s3_fetch_sfr		=	1'b1;
+										    s3_data_buffer_d	=	sfr_rd_temp;
+                                            t_p_d               =	`S4_0;
+                                        end
 									end
 							//How to fetch data from SFR_SPACE ... ...
 							//Note here not finish yet ... ...
 								end else begin
 									s3_data_buffer_d		=	iram[s3_addr_truncat];
 							//Access to NORMAL_SPACE
-								end
-								t_p_d	=	`S4_0;
+                                    t_p_d	                =	`S4_0;
+                                end
+//								t_p_d	=	`S4_0;
 							end
 						default:
 							begin 
@@ -434,12 +479,13 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 			`S3_1:
 				begin
 					if(i_data_rdy) begin
-						rd_n		=	1'b1;
-						psen_n		=	1'b1;
+						rd_n		        =	1'b1;
+						psen_n		        =	1'b1;
+                        peri_sfr_req_d      =   1'b0;
 						s3_data_buffer_d	=	i_mem_rdata;
 						s3_done_tick		=	1'b1;
 						
-						t_p_d		=	`S4_0;
+						t_p_d		        =	`S4_0;
 					end else begin
 							//Understanding ... ... ?
 						rd_n		=	1'b0;
@@ -456,12 +502,20 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 					`WR_IND_2IRAM_MODE	,
 					`WR_DIR_2IRAM_MODE	:	begin
 							if(s5_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
-								if(i_s5_write_mode_sel	==	`WR_IND_2IRAM_MODE	)
+								if(i_s5_write_mode_sel	==	`WR_IND_2IRAM_MODE	) begin
 									$display ("%m :at time %t Error: Write INVALID DATA in cu_module. (Not supporting in 8051 system)", $time);
-								else
-									is_s5_wr_sfr	=	1'b1;
-                                
-								t_p_d			=	`S6_0;
+                                    t_p_d			        =	`S6_0;
+                                end else begin
+                                    if(is_wr_periCtrl_sfr) begin
+                                        we_n	            =	1'b0;
+							            t_p_d	            =	`S5_1;
+                                        peri_sfr_req_d      =   1'b1;
+                                    end else begin
+									    is_s5_wr_sfr	    =	1'b1;
+                                        t_p_d			    =	`S6_0;
+                                    end
+                                end
+//								t_p_d			=	`S6_0;
 							end else begin
 							//Write back to NORMAL_SPACE
 								t_p_d			=	`S6_0;
@@ -480,10 +534,11 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 			`S5_1:
 				begin
 					if(i_data_rdy) begin
-						we_n	=	1'b1;
-						t_p_d	=	`S6_0;
+						we_n	            =	1'b1;
+						t_p_d	            =	`S6_0;
+                        peri_sfr_req_d      =   1'b0;
                     end else begin
-						we_n	=	1'b0;
+						we_n	            =	1'b0;
                     end
 				end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -691,5 +746,6 @@ assign		o_sx_1				=		sx_1_q;
 assign      o_s1_done_tick      =       s1_done_tick;
 assign      o_s2_done_tick      =       s2_done_tick;
 assign      o_s3_done_tick      =       s3_done_tick;
+assign      o_peri_sfr_req      =       peri_sfr_req_q  |   peri_sfr_req_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule
