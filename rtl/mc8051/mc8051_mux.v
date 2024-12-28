@@ -107,6 +107,7 @@ assign		o_s5_mem_addr_d	=	(i_s5_mem_addr_sel		==	`S5_ADDR_RS0    )	?	{8'b0,r0_w	
 							//For bit operation
 								(i_s5_mem_addr_sel		==	`S5_ADDR_SX		)	?	{8'b0,	i_sx_0		}							:
 								(i_s5_mem_addr_sel		==	`S5_ADDR_SP		)	?	{8'b0,	i_sp		}							:
+                                (i_s5_mem_addr_sel      ==  `S5_ADDR_DPTR   )   ?   {i_dph,i_dpl        }                           :
 								8'bzzzz_zzzz;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//							
 assign		o_mem_wdata		=	(i_mem_wdata_sel		==	`S5_WR_S2B		)	?	i_s2_data_buffer								:

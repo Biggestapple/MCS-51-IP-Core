@@ -17,12 +17,13 @@ module mc8051_top(
 
 	output					    mem_we_n,
 	output					    mem_rd_n,
+    output                      mem_sfr_n,
 	output					    mem_psen_n,
 	input					    mem_data_rdy,
 	input	[7:0]			    mem_rdata,
 	output	[7:0]			    mem_wdata,
 	output	[15:0]			    mem_addr,
-	
+
 	input					    int_req_n,
 	output					    int_ack_n,
 	input	[7:0]			    int_so_num,
@@ -35,6 +36,7 @@ wire		[3:0]			    t_p_q;
 
 wire							w_we_n;
 wire							w_rd_n;
+wire                            w_peri_sfr_req;
 wire							w_psen_n;
 wire							w_data_rdy;
 wire		[7:0]				w_mem_wdata;
@@ -75,7 +77,7 @@ wire		[2:0]				w_op_psw_mode;
 wire		[7:0]				w_alu_in0;
 wire		[7:0]				w_alu_in1;
 wire		[7:0]				w_alu_o1_temp;
-wire		[7:0]				w_alu_o2_temp;
+wire		[7:0]				w_alu_o0_temp;
 wire		[7:0]				w_alu_psw_temp;
 wire							w_alu_ready;
 
@@ -87,16 +89,21 @@ wire		[7:0]				w_acc;
 wire		[7:0]				w_bx;
 wire		[7:0]				w_sx_0;
 wire		[7:0]				w_sx_1;
+
+wire                            w_s1_done_tick;
+wire                            w_s2_done_tick;
+wire                            w_s3_done_tick;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 biu						u_biu(
 	.clk									(clk							),
 	.reset_n								(reset_n						),
 	
-	.i_t_p_d								(t_p_d							),
-	.i_t_p_q								(t_p_q							),
+	.i_t_p_d								(w_t_p_d                        ),
+	.i_t_p_q								(w_t_p_q                        ),
 	
 	.i_we_n									(w_we_n							),
 	.i_rd_n									(w_rd_n							),
+    .i_peri_sfr_req                         (w_peri_sfr_req                 ),
 	.i_psen_n								(w_psen_n						),
 	.o_data_rdy								(w_data_rdy						),
 	.o_mem_rdata							(w_mem_rdata					),
@@ -109,6 +116,7 @@ biu						u_biu(
 	.i_s3_mem_addr_d						(w_s3_mem_addr_d				),
 	.i_s5_mem_addr_d						(w_s5_mem_addr_d				),
 	
+    .mem_sfr_n                              (mem_sfr_n                      ),
 	.mem_we_n								(mem_we_n						),
 	.mem_rd_n								(mem_rd_n						),
 	.mem_psen_n								(mem_psen_n						),
@@ -123,11 +131,15 @@ biu						u_biu(
 op_decoder				u_op_decoder(
 	.i_instr_buffer							(w_s1_instr_buffer				),
 	.i_ci_stage								(w_ci_stage						),
+
+    .i_s1_done_tick                         (w_s1_done_tick                 ),
+    .i_s2_done_tick                         (w_s2_done_tick                 ),
+    .i_s3_done_tick                         (w_s3_done_tick                 ),
 	
 	.o_mc_b									(w_mc_b							)
 );
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-op_decoder				u_op_decoder(
+mc_decoder				u_mc_decoder(
 	.clk									(clk							),
 	.reset_n								(reset_n						),
 	
@@ -176,8 +188,8 @@ mc51_cu					u_mc51_cu(
 	.i_reg_sor_sel							(w_reg_sor_sel					),
 	.i_pc_reload_mode_sel					(w_pc_reload_mode_sel			),
 	
-	.i_alu_o1_temp							(w_alu_o1_temp					),
-	.i_alu_o2_temp							(w_alu_o2_temp					),
+	.i_alu_o1_temp							(w_alu_o0_temp					),
+	.i_alu_o2_temp							(w_alu_o1_temp					),
 	.i_alu_psw_temp							(w_alu_psw_temp					),
 	.i_alu_ready							(w_alu_ready					),
 
@@ -192,6 +204,9 @@ mc51_cu					u_mc51_cu(
 	
 	.o_t_p_d								(w_t_p_d						),
 	.o_t_p_q								(w_t_p_q						),
+    .o_s1_done_tick                         (w_s1_done_tick                 ),
+    .o_s2_done_tick                         (w_s2_done_tick                 ),
+    .o_s3_done_tick                         (w_s3_done_tick                 ),
 	.o_ci_stage								(w_ci_stage						),
 
 	.o_pcl									(w_pcl							),
@@ -212,6 +227,7 @@ mc51_cu					u_mc51_cu(
 	.o_rd_n									(w_rd_n							),
 	.o_psen_n								(w_psen_n						),
 	.i_data_rdy								(w_data_rdy						),
+    .o_peri_sfr_req                         (w_peri_sfr_req                 ),
 
 	.i_int_req_n							(int_req_n						),
 	.o_int_ack_n							(int_ack_n						),
@@ -229,7 +245,7 @@ mc8051_alu				u_mc8051_alu(
 	.i_op_psw_mode							(w_op_psw_mode					),
 	
 	.i_alu_in0								(w_alu_in0						),
-	.i_alu_in1								(w_alu_in1_sel					),
+	.i_alu_in1								(w_alu_in1					    ),
 	
 	.i_s3_data_buffer						(w_s3_data_buffer				),
 	.i_s2_data_buffer						(w_s2_data_buffer				),
