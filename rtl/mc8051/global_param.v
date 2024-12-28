@@ -18,6 +18,22 @@
 `define					DPL					8'h82
 `define					DPH					8'h83
 `define					PSW					8'hd0
+`define                 IE                  8'ha8
+`define                 IP                  8'hb8
+`define                 TMOD                8'h89
+`define                 TCON                8'h88
+`define                 TL0                 8'h8a
+`define                 TL1                 8'h8b
+`define                 TH0                 8'h8c
+`define                 TH1                 8'h8d
+`define                 SCON                8'h98
+`define                 SBUF                8'h99
+`define                 PCON                8'h87
+
+`define                 P0                  8'h80
+`define                 P1                  8'h90
+`define                 P2                  8'ha0
+`define                 P3                  8'hb0
 //Define the instructions as follows
 //Move byte variable instruction group
 `define					MOV_A_RN			8'b1110_1zzz
@@ -352,6 +368,7 @@
 `define					S5_ADDR_BITM1		4'h6
 `define					S5_ADDR_SX			4'h7
 `define					S5_ADDR_SP			4'h8
+`define                 S5_ADDR_DPTR        4'h9
 //Define the mem_wdata_sel
 `define					S5_WR_S2B			4'h0
 `define					S5_WR_S3B			4'h1
