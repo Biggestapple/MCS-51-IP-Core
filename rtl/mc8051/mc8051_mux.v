@@ -70,6 +70,7 @@ assign		o_alu_in1		=	(i_alu_in1_sel			==	`ALU_I1_S2B	    )	?		i_s2_data_buffer	 
 assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w	+	i_s1_instr_buffer[2:0]}		    :
 								(i_s2_mem_addr_sel		== 	`S2_ADDR_RS1	)	?	{8'b0,r0_w	+	i_s1_instr_buffer[0]}	        :
 								(i_s2_mem_addr_sel		==	`S2_ADDR_PC		) 	?	{i_pch,i_pcl}								    :
+								(i_s2_mem_addr_sel		==	`S2_ADDR_SP		) 	?	{8'b0,i_sp  }								    :
 							//Fetch the next op_code
 								(i_s2_mem_addr_sel		==	`S2_ADDR_INDX16	)	?	{i_s3_data_buffer,i_s2_data_buffer}			    :
 								(i_s2_mem_addr_sel		==	`S2_ADDR_INDX8	)	?	{8'b0,i_s2_data_buffer}						    :
