@@ -559,8 +559,8 @@ always @(t_p_q or sfr_rd_temp or i_data_rdy
 					int_ack_n			=	1'b0;
 							//Load the "LCALL" Instruction
 					s1_instr_buffer_d	=	`LCALL;
-					s2_data_buffer_d	=	8'h00;
-					s3_data_buffer_d	=	`INT_VTAB_SADDR	+	int_so_num;
+					s2_data_buffer_d	=	`INT_VTAB_SADDR	+	int_so_num;
+					s3_data_buffer_d	=	8'h00;
 					
 							//Jump to S4_0 stage
 					t_p_d				=	`S4_0;
@@ -604,7 +604,7 @@ always @(*) begin
 				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{{8{s3_data_buffer_q[7]}},s3_data_buffer_q};
 							//Won't use alu module for simplicity
 				`PC_IND_RELOAD		:		{pch_d,pcl_d}	=	{8'b0,acc_q	}	+	{dph_q,	dpl_q};
-				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s2_data_buffer_q,	s2_data_buffer_q};
+				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s3_data_buffer_q,	s2_data_buffer_q};
 							//For "LJMP" instruction	
 				`PC_16X_RELOAD		:		{pch_d,pcl_d}	=	{sx_0_q,s2_data_buffer_q};		
 				default:
