@@ -85,6 +85,10 @@ module op_decoder(
 */
                 `JZ             :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCZER,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
                 `JNZ            :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_ROF_RELOAD,`JP_ACCNZE,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
+                
+                `LCALL          :   o_mc_b  =   {1'b1,`FROM_A_TEMP,`TO_SP_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_P1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_PCL,`S3_ADDR_PC,`IND_EXROM_MODE,1'b1,`S2_ADDR_PC,`IND_EXROM_MODE,1'b1};
+                `RET            :   o_mc_b  =   {1'b1,`FROM_S2_BUF,`TO_SX0_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_SP,`IND_IRAM_MODE,1'b0};
+                `RETI           :   o_mc_b  =   {1'b1,`FROM_S2_BUF,`TO_SX0_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_SP,`IND_IRAM_MODE,1'b0};
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 /*
                 LOGICAL OPERATION
@@ -116,6 +120,10 @@ module op_decoder(
 
                 `PUSH           :   o_mc_b  =   {1'b0,`FROM_NULL_0,`TO_IDLE_0,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_S2B,`ALU_I0_ACC,`ALU_IDLE_0,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_S3B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
 
+                `LCALL          :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_SP_REG,`PC_16B_RELOAD,`JP_NOCOND,`PSW_M0_RELOAD,`ALU_I1_P1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_SP,`WR_IND_2IRAM_MODE,`S5_WR_PCH,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+                `RET            :   o_mc_b  =   {1'b1,`FROM_A_TEMP,`TO_SP_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_N1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+                `RETI           :   o_mc_b  =   {1'b1,`FROM_A_TEMP,`TO_SP_REG,`PC_NUL_RELOAD,`JP_IDLE_0,`PSW_M0_RELOAD,`ALU_I1_N1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_PC,`DISCARD_MODE,1'b0};
+
                 default:
                     begin
                         o_mc_b  =   {`MCODE_WIDTH{1'bz}};
@@ -125,7 +133,8 @@ module op_decoder(
             endcase
         else if(i_ci_stage == 2'b10)
             casez(i_instr_buffer)
-
+                `RET            :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_SP_REG,`PC_16X_RELOAD,`JP_NOCOND,`PSW_M0_RELOAD,`ALU_I1_N1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_SP,`IND_IRAM_MODE,1'b0};
+                `RETI           :   o_mc_b  =   {1'b0,`FROM_A_TEMP,`TO_SP_REG,`PC_16X_RELOAD,`JP_NOCOND,`PSW_M0_RELOAD,`ALU_I1_N1,`ALU_I0_SP,`ALU_ARI_ADD,`S5_ADDR_INDX8,`WR_DISCARD_MODE,`S5_WR_S2B,`S3_ADDR_PC,`DISCARD_MODE,1'b0,`S2_ADDR_SP,`IND_IRAM_MODE,1'b0};
                 default:
                     begin
                         o_mc_b  =   {`MCODE_WIDTH{1'bz}};
