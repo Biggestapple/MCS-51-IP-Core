@@ -1,5 +1,5 @@
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-//	FILE: 		mc8051_cu.v
+//	FILE: 		mc8051_cu.sv
 // 	AUTHOR:		Biggest_apple
 // 	
 //	ABSTRACT:	
@@ -313,8 +313,7 @@ always @(posedge clk or negedge reset_n)
     if(~reset_n)        s3_data_buffer_q        <=  8'bzzzz_zzzz;
     else                s3_data_buffer_q        <=  s3_data_buffer_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-always @(t_p_q or sfr_rd_temp or i_data_rdy
-        or int_req_n or i_alu_ready or i_s2_fetch_mode_sel or i_mem_rdata) begin
+always_comb begin
 	t_p_d				=	t_p_q;
 	
 	is_s2_fetch_sfr		=	1'b0;
