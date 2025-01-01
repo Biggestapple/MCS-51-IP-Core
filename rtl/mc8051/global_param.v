@@ -188,16 +188,16 @@
 
 `define					S8_HALT_LOOP		4'd15
 //Define the interupt vector table
-`define					INT_VECTOR_0		16'h0003
-`define					INT_VECTOR_1		16'h000b
-`define					INT_VECTOR_2		16'h0013
-`define					INT_VECTOR_3		16'h001b
-`define					INT_VECTOR_4		16'h0023
-`define					INT_VECTOR_5		16'h002b
+`define					INT_VECTOR_0		8'h03
+`define					INT_VECTOR_1		8'h0b
+`define					INT_VECTOR_2		8'h13
+`define					INT_VECTOR_3		8'h1b
+`define					INT_VECTOR_4		8'h23
+`define					INT_VECTOR_5		8'h2b
 								//Not used
-`define					INT_VECTOR_6		16'h0033
+`define					INT_VECTOR_6		8'h33
 								//Not used
-`define					INT_VECTOR_7		16'h003b
+`define					INT_VECTOR_7		8'h3b
 								//Not used
 								
 `define					MCODE_WIDTH			32*2
