@@ -93,6 +93,11 @@ always_comb begin : IntReq_PriorityMux
         int_Lprio_req   =   int_Hprio_req ^ int_req_wline;
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+`define             EA_ENABLE_CLRPEND
+/*
+`define             EA_DISABLE_CLRPEND
+*/
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 reg                 int_Lprio_PendClr;
 reg                 int_Hprio_PendClr;
 
@@ -104,7 +109,14 @@ always_ff @(posedge clk or negedge reset_n)
         if(~reset_n) begin
             int_Lprio_PendFF    <=  8'h00;
             int_Hprio_PendFF    <=  8'h00;
-        end else if(int_Hprio_PendClr | int_Lprio_PendClr) begin
+    end 
+`ifdef  EA_ENABLE_CLRPEND
+    else if (~w_EA      ) begin
+            int_Lprio_PendFF    <=  8'h00;
+            int_Hprio_PendFF    <=  8'h00;
+    end 
+`endif
+    else if(int_Hprio_PendClr | int_Lprio_PendClr) begin
             if(int_Hprio_PendClr)
                 case(int_so_num)
                     `INT_VECTOR_0   :   int_Hprio_PendFF[0] <=  1'b0;
@@ -143,8 +155,8 @@ always_ff @(posedge clk or negedge reset_n)
             wstate              <=  W_INT_SWF;
             int_req_n           <=  1'b1;
 
-            int_Hprio_PendClr   <=  1'b0;
-            int_Lprio_PendClr   <=  1'b0;
+//          int_Hprio_PendClr   <=  1'b0;
+//          int_Lprio_PendClr   <=  1'b0;
         end else
             case (wstate)
                 W_INT_SWF:
@@ -176,6 +188,19 @@ always_ff @(posedge clk or negedge reset_n)
                 default:    wstate      <=  3'bzzz;
             endcase
     end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+/*
+    reg                 int_reti_q0 =   1'b0;
+    reg                 int_reti_q1 =   1'b0;
+    wire                int_reti_pEdge;
+    always @(posedge clk)
+        {int_reti_q1,   int_reti_q0     }   <=  {int_reti_q0,   int_reti    };
+    assign              int_reti_pEdge      =   {int_reti_q1,int_reti_q0}   ==  2'b01;
+*/
+always_comb begin
+        int_Hprio_PendClr   =   (wstate ==  W_HPRI_HOLD)    &   int_reti;
+        int_Lprio_PendClr   =   (wstate ==  W_LPRI_HOLD)    &   int_reti;
+end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always_comb begin : INtVectorEntry_Gen
     if(wstate   ==  W_HPRI_LOOP ||  wstate  ==  W_HPRI_HOLD)
