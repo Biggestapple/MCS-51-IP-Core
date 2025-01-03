@@ -213,10 +213,12 @@ always @(posedge clk)
 reg		[7:0]		sfr_rd_temp;
 reg					is_s2_fetch_sfr;
 reg					is_s3_fetch_sfr;
+reg                 is_rd_periCtrl_sfr;
 reg		[7:0]		sfr_addr;
 always @(*) begin
-	sfr_addr		=		(is_s2_fetch_sfr	==	1'b1)	?	s2_addr_truncat:
-							(is_s3_fetch_sfr	==	1'b1)	?	s3_addr_truncat:8'h00;
+    is_rd_periCtrl_sfr  =       1'b0;
+	sfr_addr		    =		(is_s2_fetch_sfr	==	1'b1)	?	s2_addr_truncat:
+							    (is_s3_fetch_sfr	==	1'b1)	?	s3_addr_truncat:8'h00;
 	if(is_s2_fetch_sfr|is_s3_fetch_sfr) begin
 		case(sfr_addr)
 			`ACC	:			sfr_rd_temp		=	acc_q;
@@ -227,7 +229,9 @@ always @(*) begin
 			`PSW	:			sfr_rd_temp		=	psw_q;
 			default: begin
 				$display ("%m :at time %t Warning no such SFR and return 8'bzzzz_zzzz.", $time);
-				sfr_rd_temp		=	8'bzzzz_zzzz;
+                $display ("%m :at time %t Trying fetching peripheral sfr.", $time);
+				sfr_rd_temp		    =	8'bzzzz_zzzz;
+                is_rd_periCtrl_sfr  =   1'b1;
 			end
 		endcase
 	end else
@@ -254,19 +258,23 @@ always @(posedge clk or negedge reset_n) begin
         peri_sfr_req_q       <=  peri_sfr_req_d;
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-reg                 is_rd_periCtrl_sfr;
-always @(*)
-    case(sfr_addr)
-        `ACC,`B,`SP,`DPL,`DPH,`PSW	:   is_rd_periCtrl_sfr =   1'b0;
-        default                     :   is_rd_periCtrl_sfr =   1'b1;
-    endcase
+/*
+    reg                 is_rd_periCtrl_sfr;
+    always @(*)
+        case(sfr_addr)
+            `ACC,`B,`SP,`DPL,`DPH,`PSW	:   is_rd_periCtrl_sfr =   1'b0;
+            default                     :   is_rd_periCtrl_sfr =   1'b1;
+        endcase
+*/
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+
 reg                 is_wr_periCtrl_sfr;
 always @(*)
     case(s5_addr_truncat)
         `ACC,`B,`SP,`DPL,`DPH,`PSW	:   is_wr_periCtrl_sfr =   1'b0;
         default                     :   is_wr_periCtrl_sfr =   1'b1;
     endcase
+
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 task s2_where_to_go(
 	input	[2:0]	i_s2_fetch_mode_sel,
@@ -388,12 +396,13 @@ always_comb begin
 										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
                                         t_p_d                   =   `S8_HALT_LOOP;
                                     end else begin
+                                        is_s2_fetch_sfr		=	1'b1;
+
                                         if(is_rd_periCtrl_sfr   ) begin
                                             rd_n                =   1'b0;
                                             t_p_d               =   `S2_1;
                                             peri_sfr_req_d      =   1'b1;
                                         end else begin
-                                            is_s2_fetch_sfr		=	1'b1;
                                             s2_data_buffer_d	=	sfr_rd_temp;
                                             s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
                                         end
@@ -450,12 +459,13 @@ always_comb begin
 										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
                                         t_p_d	                =	`S4_0;
                                     end else begin
+                                        is_s3_fetch_sfr		=	1'b1;
+
                                         if(is_rd_periCtrl_sfr) begin
                                             rd_n                =   1'b0;
                                             t_p_d               =   `S3_1;
                                             peri_sfr_req_d      =   1'b1;
                                         end else begin
-										    is_s3_fetch_sfr		=	1'b1;
 										    s3_data_buffer_d	=	sfr_rd_temp;
                                             t_p_d               =	`S4_0;
                                         end
