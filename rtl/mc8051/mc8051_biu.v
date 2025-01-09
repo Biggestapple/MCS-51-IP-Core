@@ -50,13 +50,13 @@ always @(posedge clk or negedge reset_n)
 	if(~reset_n)
 		mem_addr			<=	16'h00_00;
 	else begin
-		if		(i_t_p_d	==	`S1_0	)
+		if		(i_t_p_q	==	`S1_0   ||  i_t_p_d	==`S1_0 )
 			mem_addr		<=	{i_pch,	i_pcl};
-		else if	(i_t_p_q	==	`S2_0	)
+		else if	(i_t_p_q	==	`S2_0	||  i_t_p_d ==`S2_0 )
 			mem_addr		<=	i_s2_mem_addr_d;
-		else if	(i_t_p_q	==	`S3_0	)
+		else if	(i_t_p_q	==	`S3_0	||  i_t_p_d ==`S3_0 )
 			mem_addr		<=	i_s3_mem_addr_d;
-		else if	(i_t_p_d	==	`S5_0	)
+		else if	(i_t_p_q	==	`S5_0	||  i_t_p_d	==`S5_0 )
 			mem_addr		<=	i_s5_mem_addr_d;
 		else
 			mem_addr		<=	mem_addr;

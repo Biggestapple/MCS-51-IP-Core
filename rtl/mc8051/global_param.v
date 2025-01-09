@@ -274,7 +274,7 @@
 `define					ALU_ARI_XOR			5'h0c
 `define					ALU_ARI_CPL			5'h0d
 `define					ALU_ARI_SWAP		5'h0e
-
+`define                 ALU_ARI_XCHD        5'h0f
 //Define the bit operation alu op code
 `define					ALU_LOG_ANLC		5'h10
 `define					ALU_LOG_ANLNC		5'h11

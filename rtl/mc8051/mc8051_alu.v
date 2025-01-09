@@ -359,6 +359,12 @@ always @(*) begin
 					cy_d						=	(alu_da_cy_w	==	1'b1)	?	1'b1:	cy_q;
 					calc_done_d					=	1'b1;
 				end
+            `ALU_ARI_XCHD:
+                begin
+                    alu_o0_temp_d               =   {alu_in0_temp[7:4],alu_in1_temp[3:0]};
+                    alu_o1_temp_d               =   {alu_in1_temp[7:4],alu_in0_temp[3:0]};
+                    calc_done_d                 =   1'b1;
+                end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//			
 `ifdef	ALU_INCLUDE_MUL
 			`ALU_ARI_MUL:

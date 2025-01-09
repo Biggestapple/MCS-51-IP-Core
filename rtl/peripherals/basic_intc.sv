@@ -33,12 +33,13 @@ module nvi_intc(
     output reg  [7:0]           int_so_num,
 
 //Interrupt Signal Interface
-
     input                       int_exIO0,
     input                       int_exIO1,
     input                       int_TF0,
     input                       int_TF1,
-    input                       int_UART0
+    input                       int_UART0,
+//For debug purpose
+    output reg  [7:0]           int_resp_n
 );
 
 reg     [7:0]       IE_q;
@@ -202,6 +203,30 @@ always_comb begin
         int_Lprio_PendClr   =   (wstate ==  W_LPRI_HOLD)    &   int_reti;
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always_comb begin : INtVectorEntry_RESP
+    int_resp_n      =   8'b1111_1111;
+/*
+    int_resp_n[4:0] formula:
+        int_UART0_ack_n,int_TF1_ack_n,int_exIO1_ack_n,int_TF0_ack_n,int_exIO0_ack_n
+*/
+    if(wstate   ==  W_HPRI_LOOP )
+        int_resp_n  =   (int_Hprio_PendFF[0])   ?   8'b1111_1110:
+                        (int_Hprio_PendFF[1])   ?   8'b1111_1101:
+                        (int_Hprio_PendFF[2])   ?   8'b1111_1011:
+                        (int_Hprio_PendFF[3])   ?   8'b1111_0111:
+                        (int_Hprio_PendFF[4])   ?   8'b1110_1111:  
+
+                        8'hff;
+    else if(wstate  ==  W_LPRI_LOOP)
+        int_resp_n  =   (int_Lprio_PendFF[0])   ?   8'b1111_1110:
+                        (int_Lprio_PendFF[1])   ?   8'b1111_1101:
+                        (int_Lprio_PendFF[2])   ?   8'b1111_1011:
+                        (int_Lprio_PendFF[3])   ?   8'b1111_0111:
+                        (int_Lprio_PendFF[4])   ?   8'b1110_1111:  
+
+                        8'hff;
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always_comb begin : INtVectorEntry_Gen
     if(wstate   ==  W_HPRI_LOOP ||  wstate  ==  W_HPRI_HOLD)
         int_so_num  =   (int_Hprio_PendFF[0])   ?   `INT_VECTOR_0:
@@ -246,16 +271,24 @@ always_comb begin
         endcase
 end
 
+reg     [7:0]       mem_rdata_buf_q;
+reg     [7:0]       mem_rdata_buf_d;
+
 always_comb begin
     if(~mem_rd_n    &&  intc_config_active)
         case(mem_addr[7:0])
-            `IE     :       mem_rdata   =   IE_q;
-            `IP     :       mem_rdata   =   IP_q;
-            default :       mem_rdata   =   8'bzzzz_zzzz;
+            `IE     :       mem_rdata_buf_d   =   IE_q;
+            `IP     :       mem_rdata_buf_d   =   IP_q;
+            default :       mem_rdata_buf_d   =   8'bzzzz_zzzz;
         endcase
     else
-        mem_rdata   =   8'bzzzz_zzzz;
+        mem_rdata_buf_d     =   mem_rdata_buf_q;
+    mem_rdata       =   mem_rdata_buf_q;
 end
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)    mem_rdata_buf_q     <=  8'hzz;
+    else            mem_rdata_buf_q     <=  mem_rdata_buf_d;
+
 assign              mem_ready_out       =   1'b1;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule
