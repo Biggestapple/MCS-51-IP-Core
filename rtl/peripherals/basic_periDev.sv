@@ -497,9 +497,62 @@ always_comb begin : UART0_COLOGIC
     endcase
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+reg     [7:0]       io_p0_q;
+reg     [7:0]       io_p0_d0;
+reg     [7:0]       io_p1_q;
+reg     [7:0]       io_p1_d0;
+reg     [7:0]       io_p2_q;
+reg     [7:0]       io_p2_d0;
+reg     [7:0]       io_p3_q;
+reg     [7:0]       io_p3_d0;
 
+reg     [7:0]       io_p0_d1;
+reg     [7:0]       io_p1_d1;
+reg     [7:0]       io_p2_d1;
+reg     [7:0]       io_p3_d1;
 
+`ifdef ENABLE_ENHANCE_IO
+reg     [7:0]       IOCON0_q;
+reg     [7:0]       IOCON0_d;
+reg     [7:0]       IOCON1_q;
+reg     [7:0]       IOCON1_d;
+reg     [7:0]       IOCON2_q;
+reg     [7:0]       IOCON2_d;
+reg     [7:0]       IOCON3_q;
+reg     [7:0]       IOCON3_d;
+`endif
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+reg     [7:0]       io_p0_sa0,io_p0_sa1;
+reg     [7:0]       io_p1_sa0,io_p1_sa1;
+reg     [7:0]       io_p2_sa0,io_p2_sa1;
+reg     [7:0]       io_p3_sa0,io_p3_sa1;
+always_ff @(posedge clk)    {io_p0_sa1,io_p0_sa0}   <=  {io_p0_sa0,io_p0    };
+always_ff @(posedge clk)    {io_p1_sa1,io_p1_sa0}   <=  {io_p1_sa0,io_p1    };
+always_ff @(posedge clk)    {io_p2_sa1,io_p2_sa0}   <=  {io_p2_sa0,io_p2    };
+always_ff @(posedge clk)    {io_p3_sa1,io_p3_sa0}   <=  {io_p3_sa0,io_p3    };
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+`ifdef ENABLE_ENHANCE_IO
+                            //TODO: RESERVE
 
+`elsif DISABLE_ENHANCE_IO
+    always_comb begin : IO_COLOGIC
+        io_p0_d1        =       io_p0_sa1;
+        io_p1_d1        =       io_p1_sa1;
+        io_p2_d1        =       io_p2_sa1;
+        io_p3_d1        =       io_p3_sa1;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+        genvar io_index;
+        generate
+            for(io_index =0; io_index <8; io_index = io_index +1) begin
+                io_p0[io_index] =   io_p0_q[io_index]   ?   1'bz    :   1'b0;
+                io_p1[io_index] =   io_p1_q[io_index]   ?   1'bz    :   1'b0;
+                io_p2[io_index] =   io_p2_q[io_index]   ?   1'bz    :   1'b0;
+                io_p3[io_index] =   io_p3_q[io_index]   ?   1'bz    :   1'b0;
+            end
+        endgenerate
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+    end
+`endif
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
