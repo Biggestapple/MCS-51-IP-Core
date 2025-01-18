@@ -276,23 +276,25 @@ always @(*)
     endcase
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-task s2_where_to_go(
-	input	[2:0]	i_s2_fetch_mode_sel,
-	output	[3:0]	t_p_d
-	);
-							//Very interesting grammar ...
-	case(i_s2_fetch_mode_sel)
-		`DISCARD_MODE	:		t_p_d	=	`S4_0;
-		`IND_EXROM_MODE,
-		`IND_EXRAM_MODE,
-		`IND_IRAM_MODE,
-		`DIR_IRAM_MODE	:		t_p_d	=	`S2_0;
-		default: begin
-					$display ("%m :at time %t Error: Fetched INVALID MCCODE during S1 in cu_module.", $time);
-					t_p_d	=	`S8_HALT_LOOP;
-				end
-	endcase
-endtask
+/*
+    task s2_where_to_go(
+        input	[2:0]	i_s2_fetch_mode_sel,
+        output	[3:0]	t_p_d
+        );
+                                //Very interesting grammar ...
+        case(i_s2_fetch_mode_sel)
+            `DISCARD_MODE	:		t_p_d	=	`S4_0;
+            `IND_EXROM_MODE,
+            `IND_EXRAM_MODE,
+            `IND_IRAM_MODE,
+            `DIR_IRAM_MODE	:		t_p_d	=	`S2_0;
+            default: begin
+                        $display ("%m :at time %t Error: Fetched INVALID MCCODE during S1 in cu_module.", $time);
+                        t_p_d	=	`S8_HALT_LOOP;
+                    end
+        endcase
+    endtask
+*/
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 task s3_where_to_go(
 	input	[2:0]	i_s3_fetch_mode_sel,
@@ -366,7 +368,8 @@ always_comb begin
 				if(multi_cycle_times	!=	2'b00) begin
 					s1_done_tick		=	1'b0;
 							// PC value shouldn't update
-					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
+                    t_p_d               =   `S2_0;
+//					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
 				end else if(i_data_rdy) begin
 /*
 					rd_n		=	1'b1;
@@ -374,8 +377,8 @@ always_comb begin
 */
 					s1_done_tick		=	1'b1;
 //					s1_instr_buffer_d	=	i_mem_rdata;
-					
-					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
+                    t_p_d               =   `S2_0;
+//					s2_where_to_go(	i_s2_fetch_mode_sel,	t_p_d);
                 end
 			end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -419,6 +422,8 @@ always_comb begin
 */
 //                              s3_where_to_go(	i_s3_fetch_mode_sel,	t_p_d);
 							end
+                        `DISCARD_MODE:
+                                t_p_d	=   `S4_0;
 						default:
 							begin 
 								$display ("%m :at time %t Error: Fetched INVALID MCCODE during S2 in cu_module.", $time);
