@@ -40,6 +40,9 @@ module nvi_periDev(
     output                      int_UART0,
 
 //IO Port & USART PORT
+    input                       intEX0_n,
+    input                       intEX1_n,
+
     inout       [7:0]           io_p0,
     inout       [7:0]           io_p1,
     inout       [7:0]           io_p2,
@@ -49,7 +52,12 @@ module nvi_periDev(
     output                      us_tx
 
 );
-
+/*
+        int_UART0_ack_n,int_TF1_ack_n,int_exIO1_ack_n,int_TF0_ack_n,int_exIO0_ack_n
+*/
+wire    int_UART0_ack_n,int_TF1_ack_n,int_exIO1_ack_n,int_TF0_ack_n,int_exIO0_ack_n;
+assign  {int_UART0_ack_n,int_TF1_ack_n,int_exIO1_ack_n,int_TF0_ack_n,int_exIO0_ack_n}   =   int_resp_n[4:0];
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 reg     [7:0]       TCON_q;
 reg     [7:0]       TCON_d;
 reg     [7:0]       TMOD_q;
@@ -63,6 +71,11 @@ reg     [7:0]       SBUF_d;
 reg     [7:0]       PCON_q;
 reg     [7:0]       PCON_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+wire                periDev_config_active   =   ~mem_sfr_n  &&  mem_sel;
+wire                PCON_config_active  =   (~mem_we_n    &&  periDev_config_active)   &&  (mem_addr[7:0]  ==  `PCON);
+wire                TCON_config_active  =   (~mem_we_n    &&  periDev_config_active)   &&  (mem_addr[7:0]  ==  `TCON);
+wire                uart_wr_sbuf_active =   (~mem_we_n    &&  periDev_config_active)   &&  (mem_addr[7:0]  ==  `SBUF);
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 reg     [3:0]       clk_div12_cnt;
 always_ff @(posedge clk or negedge reset_n) begin : CLK_DIV12_GENERATOR
     if(~reset_n)    clk_div12_cnt   <=  'd1;
@@ -75,6 +88,7 @@ reg     [0:0]       clk_div2_cnt;
 always_ff @(posedge clk or negedge reset_n) begin : CLK_DIV2_GENERATOR
     if(~reset_n)    clk_div2_cnt    <=  'd1;
     else            clk_div2_cnt    <=  clk_div2_cnt    +  1;
+end
 wire                clk_div2_pulse  =   (clk_div2_cnt   ==  'd0);
 wire                clk_div2_seq    =   clk_div2_cnt;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -92,11 +106,11 @@ always_ff @(posedge clk or negedge reset_n) begin : T1_EXTIN_SA_FlipFlop
 end
 wire                t1_extIN_neg    =   (t1_extIN_saFF  ==  2'b10);
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-reg                 w_GATE0;
-reg                 w_CT0;
+wire                w_GATE0;
+wire                w_CT0;
 
-reg                 w_GATE1;
-reg                 w_CT1;
+wire                w_GATE1;
+wire                w_CT1;
 
 reg                 t0_refPulse;
 reg                 t1_refPulse;
@@ -123,11 +137,14 @@ reg     [7:0]       TL1_q,TL1_d;
 reg     [7:0]       TH0_d0,TL0_d0;
 reg     [7:0]       TH1_d0,TL1_d0;
 
-reg                 w_TR0;
-reg                 w_TR1;
+wire                w_TR0;
+wire                w_TR1;
+
+wire                w_IT1;
+wire                w_IT0;
                             //  Stupid Design here ... ...
-reg     [1:0]       w_MOD0;
-reg     [1:0]       w_MOD1;
+wire    [1:0]       w_MOD0;
+wire    [1:0]       w_MOD1;
 
 reg                 TF0_d0;
 reg                 TF0_q;
@@ -136,7 +153,7 @@ reg                 TF1_d0;
 reg                 TF1_q;
                             //  TF1_d1 is used for baud rate generation
 reg                 TF1_d1;
-
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 wire    [15:0]      T0_16B  =   {TH0_q,     TL0_q};
 wire    [15:0]      T1_16B  =   {TH1_q,     TL1_q};
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -165,16 +182,16 @@ always_comb begin : TIMER_COLOGIC
     case(w_MOD0)
         2'b00:  
             begin
-                {TH0_d,     TL0_d}      =   (T0_16B[13] ==  1'b1    &&  w_TR0   &&  t0_refPulse)   ?   'b0     :   T0_16B +1;
-//              {TH1_d,     TL1_d}      =   (T1_16B[13] ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
+                {TH0_d0,     TL0_d0}    =   (T0_16B[13] ==  1'b1    &&  w_TR0   &&  t0_refPulse)   ?   'b0     :   T0_16B +1;
+//              {TH1_d0,     TL1_d0}    =   (T1_16B[13] ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
 
 //              TF1_d0                  =   (T1_16B[13] ==  1'b1)   ?   1'b1    :   TF1_q;
                 TF0_d0                  =   (T0_16B[13] ==  1'b1)   ?   1'b1    :   TF0_q;
             end
         2'b01:
             begin
-                {TH0_d,     TL0_d}      =   (&  T0_16B ==  1'b1    &&  w_TR0   &&  t0_refPulse)   ?   'b0     :   T0_16B +1;
-//              {TH1_d,     TL1_d}      =   (&  T1_16B ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
+                {TH0_d0,     TL0_d0}    =   (&  T0_16B ==  1'b1    &&  w_TR0   &&  t0_refPulse)   ?   'b0     :   T0_16B +1;
+//              {TH1_d0,     TL1_d0}    =   (&  T1_16B ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
 
 //              TF1_d0                  =   (&  T1_16B ==  1'b1)    ?   1'b1    :   TF1_q;
                 TF0_d0                  =   (&  T0_16B ==  1'b1)    ?   1'b1    :   TF0_q;
@@ -182,21 +199,21 @@ always_comb begin : TIMER_COLOGIC
         2'b10:
             begin
                             // AutoReload mode
-                TL0_d                   =   (&  TL0_q ==  1'b1    &&  w_TR0   &&  t0_refPulse)    ?   TH0_q   :   TL0_q +1;
-//              TL1_d                   =   (&  TL1_q ==  1'b1    &&  w_TR1   &&  t1_refPulse)    ?   TH1_q   :   TL1_q +1;
+                TL0_d0                  =   (&  TL0_q ==  1'b1    &&  w_TR0   &&  t0_refPulse)    ?   TH0_q   :   TL0_q +1;
+//              TL1_d0                  =   (&  TL1_q ==  1'b1    &&  w_TR1   &&  t1_refPulse)    ?   TH1_q   :   TL1_q +1;
 
 //              TF1_d0                  =   (&  TL1_q ==  1'b1)     ?   1'b1    :   TF1_q;
                 TF0_d0                  =   (&  TL0_q ==  1'b1)     ?   1'b1    :   TF0_q;
             end
         2'b11:
             begin
-                TL0_d                   =   (&  TL0_q ==  1'b1    &&  w_TR0   &&  t0_refPulse)    ?   'b0     :   TL0_q +1;
-                TH0_d                   =   (&  TH0_q ==  1'b1    &&  w_TR1   &&  t1_refPulse)    ?   'b0     :   TH0_q +1;
+                TL0_d0                  =   (&  TL0_q ==  1'b1    &&  w_TR0   &&  t0_refPulse)    ?   'b0     :   TL0_q +1;
+                TH0_d0                  =   (&  TH0_q ==  1'b1    &&  w_TR1   &&  t1_refPulse)    ?   'b0     :   TH0_q +1;
 
                 TF1_d0                  =   (&  TH0_q ==  1'b1)     ?   1'b1    :   TF1_q;
                 TF0_d0                  =   (&  TL0_q ==  1'b1)     ?   1'b1    :   TF0_q;
 
-                TL1_d                   =   (&  TL1_q ==  1'b1)     ?   TH1_q   :   TL1_q +1;
+                TL1_d0                  =   (&  TL1_q ==  1'b1)     ?   TH1_q   :   TL1_q +1;
                 TF1_d1                  =   (&  TL1_q ==  1'b1);
             end
         default:    begin       end
@@ -205,17 +222,17 @@ always_comb begin : TIMER_COLOGIC
     case(w_MOD1)
         2'b00:
             begin
-                {TH1_d,     TL1_d}      =   (T1_16B[13] ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
+                {TH1_d0,     TL1_d0}    =   (T1_16B[13] ==  1'b1    &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
                 TF1_d0                  =   (T1_16B[13] ==  1'b1)   ?   1'b1    :   TF1_q;
             end
         2'b01:
             begin
-                {TH1_d,     TL1_d}      =   (&  T1_16B ==  1'b1     &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
+                {TH1_d0,     TL1_d0}    =   (&  T1_16B ==  1'b1     &&  w_TR1   &&  t1_refPulse)   ?   'b0     :   T1_16B +1;
                 TF1_d0                  =   (&  T1_16B ==  1'b1)    ?   1'b1    :   TF1_q;
             end
         2'b10:
             begin
-                TL1_d                   =   (&  TL1_q ==  1'b1      &&  w_TR1   &&  t1_refPulse)    ?   TH1_q   :   TL1_q +1;
+                TL1_d0                  =   (&  TL1_q ==  1'b1      &&  w_TR1   &&  t1_refPulse)    ?   TH1_q   :   TL1_q +1;
                 TF1_d0                  =   (&  TL1_q ==  1'b1)     ?   1'b1    :   TF1_q;
             end
         2'b11:
@@ -244,7 +261,7 @@ always_ff @(posedge clk or negedge reset_n) begin : UART0_TX_BandRate_SOURCE
     if(~reset_n )    
         uart_tx_baudRate_cnt        <=  5'h0;
     else if(uart_baudRate_source_pulse)
-        uart_tx_baudRate_cnt        <=  uart_tx_baudRate_cnt  +    (5'h1   <<  w_SMOD)
+        uart_tx_baudRate_cnt        <=  uart_tx_baudRate_cnt  +    (5'h1   <<  w_SMOD);
 end
 
 reg     [1:0]       uart_tx_baudRate_cnt_saFF;
@@ -261,7 +278,7 @@ always_ff @(posedge clk or negedge reset_n) begin : UART0_RX_BandRate_SOURCE
     else if(uart_rx_active)
         uart_rx_baudRate_cnt        <=  5'h0;
     else if(uart_baudRate_source_pulse)
-        uart_rx_baudRate_cnt        <=  uart_rx_baudRate_cnt  +    (5'h1   <<  w_SMOD)
+        uart_rx_baudRate_cnt        <=  uart_rx_baudRate_cnt  +    (5'h1   <<  w_SMOD);
 end
 
 reg     [1:0]       uart_rx_baudRate_cnt_saFF;
@@ -270,7 +287,7 @@ always_ff @(posedge clk or negedge reset_n)
     else            uart_rx_baudRate_cnt_saFF   <=   {uart_rx_baudRate_cnt_saFF[0],uart_tx_baudRate_cnt[4]};
 wire                uart_rx_baudRate_pulse      =    (uart_rx_baudRate_cnt_saFF ==  2'b01);
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-reg                 uart_wr_sbuf_active;
+//wire              uart_wr_sbuf_active;
 reg                 SM0_FE_q;
 reg                 RI_q,TI_q;
 
@@ -280,19 +297,21 @@ reg                 RI_clr,TI_clr;
                             //Remark : 'sa' means --> 'sample'
 reg                 uart_rd_sbuf_active;
 reg     [2:0]       uart_rx_saFF;
+
+reg                 uart_tx_triGate;
+reg                 uart_rx_triGate;
 always_ff @(posedge clk or negedge reset_n)
     if(~reset_n)    uart_rx_saFF                <=  3'b111;
     else if(clk_div12_pluse)
         uart_rx_saFF    <=  {uart_rx_saFF[1:0],uart_rx_triGate};
 wire                uart_rx_sa  =   ~(uart_rx_saFF  ==  3'b000);
 
-reg                 uart_tx_triGate;
-reg                 uart_rx_triGate;
-
 reg     [3:0]       uart_tx_bitcnt;
 reg     [3:0]       uart_rx_bitcnt;
 
 wire                w_TB8;
+wire                w_REN;
+wire                w_SMOD0;
 
 reg     [7:0]       uart_tx_buf_fromBus_d;
 reg     [8:0]       uart_tx_buf;
@@ -406,16 +425,18 @@ always_ff @(posedge clk or negedge reset_n) begin : UART0_RX_FFLOGIC
                 begin
                     RI_q        <=  (   RI_clr      )   ?   1'b0:   RI_q;
                     SM0_FE_q    <=  (   SM0_FE_clr  )   ?   1'b0:   SM0_FE_q;
-                    if(w_SM01   ==  2'b00) begin
-                        if( RI_clr  ) begin
-                            uart_rx_wstate  <=  UART_RX_SM00_SYNC;
-                            uart_rx_bitcnt  <=  4'h0;
-                        end
-                    end else begin
-                        if(uart_rx_sa   ==  1'b0) begin
-                            uart_rx_active  <=  1'b1;
-                            uart_rx_wstate  <=  UART_RX_SERI_ACT0;
-                            uart_rx_bitcnt  <=  4'h0;
+                    if(w_REN    ==  1'b1) begin
+                        if(w_SM01   ==  2'b00) begin
+                            if( RI_clr  ) begin
+                                uart_rx_wstate  <=  UART_RX_SM00_SYNC;
+                                uart_rx_bitcnt  <=  4'h0;
+                            end
+                        end else begin
+                            if(uart_rx_sa   ==  1'b0) begin
+                                uart_rx_active  <=  1'b1;
+                                uart_rx_wstate  <=  UART_RX_SERI_ACT0;
+                                uart_rx_bitcnt  <=  4'h0;
+                            end
                         end
                     end
                 end
@@ -493,7 +514,7 @@ always_comb begin : UART0_COLOGIC
                     'd12:
                         uart_tx_triGate     =   1'b1;
                 endcase
-        default:    begin   uart_tx_triGate =   1'bz    end
+        default:    begin   uart_tx_triGate =   1'bz;   end
     endcase
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -535,27 +556,202 @@ always_ff @(posedge clk)    {io_p3_sa1,io_p3_sa0}   <=  {io_p3_sa0,io_p3    };
                             //TODO: RESERVE
 
 `elsif DISABLE_ENHANCE_IO
+genvar      io_index;
     always_comb begin : IO_COLOGIC
         io_p0_d1        =       io_p0_sa1;
         io_p1_d1        =       io_p1_sa1;
         io_p2_d1        =       io_p2_sa1;
         io_p3_d1        =       io_p3_sa1;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-        genvar io_index;
-        generate
+//        generate
+
+//TODO:
+/*
             for(io_index =0; io_index <8; io_index = io_index +1) begin
                 io_p0[io_index] =   io_p0_q[io_index]   ?   1'bz    :   1'b0;
                 io_p1[io_index] =   io_p1_q[io_index]   ?   1'bz    :   1'b0;
                 io_p2[io_index] =   io_p2_q[io_index]   ?   1'bz    :   1'b0;
                 io_p3[io_index] =   io_p3_q[io_index]   ?   1'bz    :   1'b0;
             end
-        endgenerate
+*/
+//        endgenerate
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
     end
+            for(io_index =0; io_index <8; io_index = io_index +1) begin
+                assign  io_p0[io_index] =   io_p0_q[io_index]   ?   1'bz    :   1'b0;
+                assign  io_p1[io_index] =   io_p1_q[io_index]   ?   1'bz    :   1'b0;
+                assign  io_p2[io_index] =   io_p2_q[io_index]   ?   1'bz    :   1'b0;
+                assign  io_p3[io_index] =   io_p3_q[io_index]   ?   1'bz    :   1'b0;
+            end
 `endif
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always_ff @(posedge clk or negedge reset_n) begin : IO_CON_FFLOGIC
+    if(~reset_n) begin
+        io_p0_q             <=      8'b1111_1111;
+        io_p1_q             <=      8'b1111_1111;
+        io_p2_q             <=      8'b1111_1111;
+        io_p3_q             <=      8'b1111_1111;
+    end else begin
+        io_p0_q             <=      io_p0_d0;
+        io_p1_q             <=      io_p1_d0;
+        io_p2_q             <=      io_p2_d0;
+        io_p3_q             <=      io_p3_d0;
+    end
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always_ff @(posedge clk or negedge reset_n) begin : SFR_CON_FFLOGIC
+    if(~reset_n) begin
+        SCON_q              <=      8'b0000_0000;
+        PCON_q              <=      8'b00z1_0000;
+        TMOD_q              <=      8'b0000_0000;
+        TCON_q              <=      8'b0000_0000;
+    end else begin
+        SCON_q              <=      SCON_d;
+        PCON_q              <=      PCON_d;
+        TMOD_q              <=      TMOD_d;
+        TCON_q              <=      TCON_d;
+    end
+end
+wire                RB8_q               =   uart_rx_buf[8];
 
+reg                 TF0_clr;
+reg                 TF1_clr;
+reg                 IE0_clr;
+reg                 IE1_clr;
 
+reg                 IE1_q;
+reg                 IE0_q;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+wire                intEX0_req;
+wire                intEX1_req;
 
+reg     [1:0]       intEX0_saFF;
+reg     [1:0]       intEX1_saFF;
+
+always @(posedge clk or negedge reset_n)
+    if(~reset_n) begin
+        intEX0_saFF     <=      2'b00;
+        intEX1_saFF     <=      2'b00;
+    end else begin
+        intEX0_saFF     <=      {intEX0_saFF[0],    ~intEX0_n};
+        intEX1_saFF     <=      {intEX1_saFF[0],    ~intEX1_n};
+    end
+assign  intEX0_req      =   (w_IT0  ==  1'b1)   ?   intEX0_saFF ==  2'b01   :   intEX0_saFF[0];
+assign  intEX1_req      =   (w_IT1  ==  1'b1)   ?   intEX1_saFF ==  2'b01   :   intEX1_saFF[0];
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(posedge clk or negedge reset_n)
+    if(~reset_n) begin
+        IE0_q               <=      1'b0;
+        IE1_q               <=      1'b0;
+    end else begin
+        IE0_q               <=      (IE0_clr    )   ?   1'b0    :   ((IE0_q  ==  1'b1)  ?   1'b1:   intEX0_req)   ;
+                            //TODO: Here ... ... 
+        IE1_q               <=      (IE1_clr    )   ?   1'b0    :   ((IE1_q  ==  1'b1)  ?   1'b1:   intEX1_req)   ;
+    end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(posedge clk or negedge reset_n)
+    if(~reset_n) begin
+        TF0_q               <=      1'b0;
+        TF1_q               <=      1'b0;
+    end else begin
+        TF0_q               <=      (TF0_clr    )   ?   1'b0    :   TF0_d0;
+                            //TODO: Here ... ... 
+        TF1_q               <=      (TF1_clr    )   ?   1'b0    :   TF1_d0;
+    end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always_comb begin : SFR_CON_COLOGIC
+    RI_clr                  =       PCON_config_active  &   (~mem_wdata[0]);
+    TI_clr                  =       PCON_config_active  &   (~mem_wdata[1]);
+    SM0_FE_clr              =       PCON_config_active  &   (~mem_wdata[7]);
+
+    TF0_clr                 =       (TCON_config_active &   (~mem_wdata[5]))    |   (~int_TF0_ack_n     );
+    TF1_clr                 =       (TCON_config_active &   (~mem_wdata[7]))    |   (~int_TF1_ack_n     );
+    IE0_clr                 =       (TCON_config_active &   (~mem_wdata[1]))    |   (~int_exIO0_ack_n   );
+    IE1_clr                 =       (TCON_config_active &   (~mem_wdata[3]))    |   (~int_exIO1_ack_n   );
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+    if(w_SMOD0)
+        SCON_d              =       {SM0_FE_q,SCON_q[6:3],RB8_q,TI_q,RI_q   };
+    else
+        SCON_d              =       {SCON_q[7:3],RB8_q,TI_q,RI_q            };
+    PCON_d                  =       PCON_q;
+    TMOD_d                  =       TMOD_q;
+
+    TL0_d                   =       TL0_d0;
+    TH0_d                   =       TH0_d0;
+
+    TL1_d                   =       TL1_d0;
+    TH1_d                   =       TH1_d0;
+
+    TCON_d                  =       {TF1_q,TCON_q[6],TF0_q,TCON_q[4],IE1_q,TCON_q[2],IE0_q,TCON_q[0]};
+
+    io_p0_d0                =       io_p0_q;
+    io_p1_d0                =       io_p1_q;
+    io_p2_d0                =       io_p2_q;
+    io_p3_d0                =       io_p3_q;
+
+    if(~mem_we_n    &&  periDev_config_active)
+    case(mem_addr[7:0])
+        `SCON:              SCON_d                  =   mem_wdata;
+        `SBUF:              uart_tx_buf_fromBus_d   =   mem_wdata;
+        `PCON:              PCON_d                  =   mem_wdata;
+        `TMOD:              TMOD_d                  =   mem_wdata;
+        `TCON:              TCON_d                  =   mem_wdata;
+
+        `TL0:               TL0_d                   =   mem_wdata;
+        `TH0:               TH0_d                   =   mem_wdata;
+        `TL1:               TL1_d                   =   mem_wdata;
+        `TH1:               TH1_d                   =   mem_wdata;
+    endcase
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+reg     [7:0]       mem_rdata_buf_q;
+reg     [7:0]       mem_rdata_buf_d;
+
+always_comb begin
+    if(~mem_rd_n    &&  periDev_config_active)
+        case(mem_addr[7:0])
+            `SCON:          mem_rdata_buf_d     =   SCON_q;
+            `PCON:          mem_rdata_buf_d     =   PCON_q;
+            `SBUF:          mem_rdata_buf_d     =   uart_rx_buf[7:0];
+            `TMOD:          mem_rdata_buf_d     =   TMOD_q;
+            `TCON:          mem_rdata_buf_d     =   TCON_q;
+
+            `P0:            mem_rdata_buf_d     =   io_p0_d1;
+            `P1:            mem_rdata_buf_d     =   io_p1_d1;
+            `P2:            mem_rdata_buf_d     =   io_p2_d1;
+            `P3:            mem_rdata_buf_d     =   io_p3_d1;
+
+            default :       mem_rdata_buf_d     =   8'bzzzz_zzzz;
+        endcase
+    else
+        mem_rdata_buf_d     =   mem_rdata_buf_q;
+    mem_rdata       =   mem_rdata_buf_q;
+end
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)    mem_rdata_buf_q     <=  8'hzz;
+    else            mem_rdata_buf_q     <=  mem_rdata_buf_d;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+                            //SCON_q[5:6]   -->   {SM2,SM1}
+assign  w_SM01              =       (w_SMOD0    ==  1'b1)   ?   {SCON_q[5], SCON_q[6]   }   :{SCON_q[6],SCON_q[7]};
+assign  w_REN               =       SCON_q[4];
+assign  w_TB8               =       SCON_q[3];
+
+assign  w_SMOD              =       PCON_q[7];
+assign  w_SMOD0             =       PCON_q[6];
+
+assign  w_CT0               =       TMOD_q[2];
+assign  w_MOD0              =       TMOD_q[1:0];
+assign  w_GATE0             =       TMOD_q[3];
+assign  w_CT1               =       TMOD_q[6];
+assign  w_MOD1              =       TMOD_q[5:4];
+assign  w_GATE1             =       TMOD_q[7];
+
+assign  w_IT1               =       TCON_q[2];
+assign  w_IT0               =       TCON_q[0];
+assign  w_TR0               =       TCON_q[4];
+assign  w_TR1               =       TCON_q[6];
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+assign  mem_ready_out       =       1'b1;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule
