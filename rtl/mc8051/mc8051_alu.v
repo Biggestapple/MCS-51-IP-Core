@@ -39,7 +39,7 @@ module mc8051_alu(
 	output					o_alu_ready,
 	output					o_jp_active
 );
-wire			alu_active_d0	=	i_t_p_d == `S4_0;
+wire			alu_active_d0	=	i_t_p_d == `S4_0    &&  (i_alu_mode != `ALU_RLATCH);
 reg				alu_active_d1;
 reg				[4:0]		alu_mode;
 reg				[7:0]		alu_in0_temp,alu_in1_temp,alu_bin0_temp,alu_bin1_temp;
@@ -433,8 +433,11 @@ always @(*) begin
 				end
 			`ALU_LOG_CPB:
 				begin
-					alu_o0_temp_d		=	alu_bin1_temp	&	~((8'h01 << alu_bin0_temp[2:0]) & alu_bin1_temp[alu_bin0_temp[2:0]]);
-					calc_done_d         =   1'b1;
+                    if(alu_bin1_temp[alu_bin0_temp[2:0]])
+					    alu_o0_temp_d   =	alu_bin1_temp	&	~(8'h01 << alu_bin0_temp[2:0]   );
+                    else
+                        alu_o0_temp_d   =   alu_bin1_temp	|	(8'h01 << alu_bin0_temp[2:0]    );
+                    calc_done_d         =   1'b1;
 				end
 			`ALU_LOG_CPC:
 				begin
@@ -443,7 +446,10 @@ always @(*) begin
 				end
 			`ALU_LOG_MCB:
 				begin
-					alu_o0_temp_d		=	alu_bin1_temp	&	~((8'h01 << alu_bin0_temp[2:0]) & (~cy_c));
+                    if(~cy_c)
+					    alu_o0_temp_d   =	alu_bin1_temp	&	~(8'h01 << alu_bin0_temp[2:0]   );
+                    else
+                        alu_o0_temp_d   =   alu_bin1_temp	|	(8'h01 << alu_bin0_temp[2:0]    );
 					calc_done_d			=	1'b1;
 				end
 			`ALU_LOG_MBC:

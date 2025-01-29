@@ -292,6 +292,7 @@
 
 `define					ALU_INCDPTR			5'h1d
 
+`define                 ALU_RLATCH          5'h1e
 `define					ALU_IDLE_0			5'h1f
 
 //Conditional compilation for alu
