@@ -21,6 +21,7 @@
 //			Biggest_apple				2024.11.19		All Done Great !
 //			Biggest_apple				2024.11.21		Bit Addressing still has problems (No problem actually )
 //          Biggest_apple               2024.12.24      Added peripheral sfr control logic
+//          Biggest_apple               2025.7.25       Added the debugger interface (test only)     
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 `timescale 				1ns/1ps
 `include				"global_param.v"
@@ -127,7 +128,32 @@ module	mc51_cu(
 	input					i_int_req_n,
 	output					o_int_ack_n,
 	input		[7:0]		i_int_so_num,
-	output					o_int_reti
+	output					o_int_reti,
+
+// Debugger interface connected to the DBGU (Debugger Unit) module
+    output                  o_cpu_err_halt,
+    output      [7:0]       o_cpu_err_code,
+    output                  o_cpu_haltReq_n,
+
+
+    input       [2:0]       i_cpu_dbg_mode,
+    output                  o_cpu_dbg_halt, 
+    input                   i_cpu_dbg_tick,
+
+    input       [15:0]      i_cpu_dbg_brkPC,
+    output                  o_cpu_dbg_brkHit_n,
+/*
+    input                   i_cpu_dbg_memRd_n,
+    input                   i_cpu_dbg_memWr_n,
+    input       [15:0]      i_cpu_dbg_memAddr,
+    input       [7:0]       i_cpu_dbg_memWdata,
+    output      [7:0]       o_cpu_dbg_memRdata,
+    output                  o_cpu_dbg_mem_rdy
+*/
+    input                   i_cpu_dbgBoot_req_n,
+    output                  o_cpu_dbgBoot_ack_n,
+
+    input       [3:0]       i_cpu_dbgBoot_entPoint
 );
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 reg		[7:0]		s1_instr_buffer_q;
@@ -188,6 +214,70 @@ reg		[7:0]		int_so_num;
 reg					int_ack_n;
 wire				int_req_n;
 reg					int_reti;
+
+                            //Debugger related registers
+reg                 cpu_err_halt_q;
+reg                 cpu_err_halt_d;
+reg     [7:0]       cpu_err_code_q;
+reg     [7:0]       cpu_err_code_d;
+
+reg     [2:0]       cpu_dbg_mode;
+reg                 cpu_dbg_tick;
+
+reg                 cpu_dbg_halt_q;
+reg                 cpu_dbg_halt_d;
+
+reg     [15:0]      cpu_dbg_brkPC;
+reg                 cpu_dbg_brkHit_n;
+
+reg     [3:0]       cpu_dbg_boot_entPoint;
+reg                 cpu_dbg_boot_ack_n;
+reg                 cpu_dbg_boot_req_n;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always @(posedge clk or negedge reset_n)
+    if(~reset_n) begin
+        cpu_dbg_brkPC                   <=      16'hzzzz;
+        cpu_dbg_boot_entPoint           <=      4'hz;
+        cpu_dbg_boot_req_n              <=      1'b1;
+    end else begin
+        cpu_dbg_brkPC                   <=      i_cpu_dbg_brkPC;
+        cpu_dbg_boot_entPoint           <=      i_cpu_dbgBoot_entPoint;
+        cpu_dbg_boot_req_n              <=      i_cpu_dbgBoot_req_n;
+    end
+
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)
+        cpu_dbg_tick                    <=      1'b0;
+    else
+        cpu_dbg_tick                    <=      i_cpu_dbg_tick;
+
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)
+        cpu_dbg_mode                    <=      `DBG_RUN_MODE;
+    else
+        cpu_dbg_mode                    <=      i_cpu_dbg_mode;
+
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)
+        {cpu_err_halt_q,cpu_dbg_halt_q} <=      2'b00;
+    else
+        {cpu_err_halt_q,cpu_dbg_halt_q} <=      {cpu_err_halt_d,cpu_dbg_halt_d};
+
+always @(posedge clk or negedge reset_n)
+    if(~reset_n)
+        cpu_err_code_q                  <=      `NONE_ERROR_BASE;
+    else
+        cpu_err_code_q                  <=      cpu_err_code_d;
+
+always_comb begin : CPU_ERR_PROC_LOGIC
+    cpu_err_halt_d      =   cpu_err_halt_q;
+    cpu_err_code_d      =   cpu_err_code_q;
+
+    if(t_p_d == `S8_HALT_LOOP) begin
+        cpu_err_halt_d  =   1'b1;
+        cpu_err_code_d  =   `HALT_ERROR_BASE + t_p_q;
+    end
+end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 							//Interrput signals synchronization
 always @(posedge clk or negedge reset_n)
@@ -296,6 +386,28 @@ always @(*)
     endtask
 */
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+always_comb begin : GDB_BRKHIT_LOGIC
+    if(cpu_dbg_mode == `DBG_BREAK_MODE && t_p_q == `S1_0)
+        cpu_dbg_brkHit_n   =   ~(i_cpu_dbg_brkPC == {pch_q,pcl_q});
+    else
+        cpu_dbg_brkHit_n   =   1'b1;
+end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+task s1_rd_instr_buffer(
+    input   [7:0]   i_mem_rdata,
+
+    output  [3:0]   t_p_d,
+    output          rd_n,
+    output          psen_n,
+    output  [7:0]   s1_instr_buffer_d
+    );
+    rd_n		        =	1'b0;
+    psen_n		        =	1'b0;
+    s1_instr_buffer_d	=	i_mem_rdata;
+                    
+    t_p_d		        =	`S1_1;
+endtask
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 task s3_where_to_go(
 	input	[2:0]	i_s3_fetch_mode_sel,
 	output	[3:0]	t_p_d
@@ -323,7 +435,8 @@ always @(posedge clk or negedge reset_n)
     if(~reset_n)        s3_data_buffer_q        <=  8'bzzzz_zzzz;
     else                s3_data_buffer_q        <=  s3_data_buffer_d;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-always_comb begin
+always_comb begin : MAIN_CU_FSM_LOGIC
+                            //The following circuit is to generate the output signals
 	t_p_d				=	t_p_q;
 	
 	is_s2_fetch_sfr		=	1'b0;
@@ -347,17 +460,81 @@ always_comb begin
 	al_done_tick		=	1'b0;
 	
 	int_ack_n			=	1'b1;
+/*
+    cpu_err_halt_d      =   cpu_dbg_halt_q;
+    cpu_err_code_d      =   cpu_dbg_halt_q;
+*/
+    cpu_dbg_halt_d      =   cpu_dbg_halt_q;
+    cpu_dbg_boot_ack_n  =   1'b1;
+
 	case(t_p_q)
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 		`S1_0:				// Beside getting the current instruction 
 							// in s1 ~s2 phase,we should generate the next PC value (address)...
-			begin
-				rd_n		        =	1'b0;
-				psen_n		        =	1'b0;
-                s1_instr_buffer_d	=	i_mem_rdata;
-				
-				t_p_d		        =	`S1_1;
-			end
+            case(cpu_dbg_mode)
+                `DBG_RUN_MODE:
+/*
+                    begin
+                        rd_n		        =	1'b0;
+                        psen_n		        =	1'b0;
+                        s1_instr_buffer_d	=	i_mem_rdata;
+                    
+                        t_p_d		        =	`S1_1;
+                        cpu_dbg_halt_d      =   1'b0;
+                    end
+*/
+                    begin
+                        s1_rd_instr_buffer(i_mem_rdata, t_p_d, rd_n, psen_n, s1_instr_buffer_d);
+                        cpu_dbg_halt_d      =   1'b0;
+                    end
+                `DBG_HALT_MODE:
+                    begin
+                        cpu_dbg_halt_d          =   1'b1;
+                        t_p_d                   =   `S1_0;
+                            // Just the cpu halted here and we can only 
+                            // access to the iram/exram/register in this mode but how to do this ???
+                            // We can inject the mov-secp instruction /// Just LCALL jump to the DBG program that's genius
+                        if(~cpu_dbg_boot_req_n ) begin
+                            cpu_dbg_boot_ack_n  =   1'b0;
+                            //Load the "LCALL" Instruction
+					        s1_instr_buffer_d	=	`LCALL;
+					        s2_data_buffer_d	=	8'h00;
+					        s3_data_buffer_d	=	cpu_dbg_boot_entPoint + `DBG_VTAB_SADDR;
+					
+							//Jump to S4_0 stage
+					        t_p_d				=	`S4_0;
+                        end 
+                    end
+                `DBG_STEP_MODE:
+                    begin
+                        cpu_dbg_halt_d          =   1'b1;
+                        t_p_d		            =	`S1_0;
+                        if(cpu_dbg_tick) begin
+                            s1_rd_instr_buffer(i_mem_rdata, t_p_d, rd_n, psen_n, s1_instr_buffer_d);
+                            cpu_dbg_halt_d      =   1'b0;
+                            $display ("%m :at time %t DBG: Halt has been steped out.", $time);
+                        end
+                    end
+                `DBG_BREAK_MODE:
+                    begin
+                            // Todo: Implement the break dbg mode
+                            // If hit the break point, then halt the cpu ... 
+                        if(~cpu_dbg_brkHit_n & ~cpu_dbg_tick) begin
+                            cpu_dbg_halt_d      =   1'b1;
+                            t_p_d               =	`S1_0;
+                            $display ("%m :at time %t DBG: Halt has been ENTERED at point %h.", $time , cpu_dbg_brkPC);
+                        end else begin
+                            cpu_dbg_halt_d      =   1'b0;
+                            $display ("%m :at time %t DBG: Halt has been steped out.", $time);
+                            s1_rd_instr_buffer(i_mem_rdata, t_p_d, rd_n, psen_n, s1_instr_buffer_d);
+                        end
+                    end
+                default:
+                    begin
+                        $display ("%m :at time %t Error: Invalid DBG mode code.", $time);
+                        t_p_d	=	`S8_HALT_LOOP;
+                    end
+            endcase
 		`S1_1:
 			begin
                             // Tricky Bugs Here !!!
@@ -365,6 +542,7 @@ always_comb begin
 				psen_n		        =	1'b0;
 //              s1_instr_buffer_d	=	i_mem_rdata;
                 s1_instr_buffer_d   =   (multi_cycle_times == 2'b00 )   ?   i_mem_rdata :   s1_instr_buffer_q;
+                            // Locked the pos-fetch instruction during multi-cycle process
 				if(multi_cycle_times	!=	2'b00) begin
 					s1_done_tick		=	1'b0;
 							// PC value shouldn't update
@@ -736,30 +914,41 @@ always @(posedge clk or negedge reset_n)
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 							//Output-Interface combine logic here
-assign		o_t_p_d				=		t_p_d;
-assign		o_t_p_q				=		t_p_q;
-assign		o_ci_stage			=		multi_cycle_times;
-assign		o_pcl				=		pcl_q;
-assign		o_pch				=		pch_q;
-assign		o_s2_data_buffer	=		s2_data_buffer_q;
-assign		o_s3_data_buffer	=		s3_data_buffer_q;
-assign		o_we_n				=		we_n;
-assign		o_rd_n				=		rd_n;
-assign		o_psen_n			=		psen_n;
-assign		o_int_ack_n			=		int_ack_n;
-assign		o_int_reti			=		int_reti;
-assign		o_psw				=		psw_q;
-assign		o_s1_instr_buffer	=		s1_instr_buffer_q;
-assign		o_acc				=		acc_q;
-assign		o_bx				=		b_q;
-assign		o_sp				=		sp_q;
-assign		o_dpl				=		dpl_q;
-assign		o_dph				=		dph_q;
-assign		o_sx_0				=		sx_0_q;
-assign		o_sx_1				=		sx_1_q;
-assign      o_s1_done_tick      =       s1_done_tick;
-assign      o_s2_done_tick      =       s2_done_tick;
-assign      o_s3_done_tick      =       s3_done_tick;
-assign      o_peri_sfr_req      =       peri_sfr_req_q  |   peri_sfr_req_d;
+assign		o_t_p_d				    =		t_p_d;
+assign		o_t_p_q				    =		t_p_q;
+assign		o_ci_stage			    =		multi_cycle_times;
+assign		o_pcl				    =		pcl_q;
+assign		o_pch				    =		pch_q;
+assign		o_s2_data_buffer	    =		s2_data_buffer_q;
+assign		o_s3_data_buffer	    =		s3_data_buffer_q;
+assign		o_we_n				    =		we_n;
+assign		o_rd_n				    =		rd_n;
+assign		o_psen_n			    =		psen_n;
+assign		o_int_ack_n			    =		int_ack_n;
+assign		o_int_reti			    =		int_reti;
+assign		o_psw				    =		psw_q;
+assign		o_s1_instr_buffer	    =		s1_instr_buffer_q;
+assign		o_acc				    =		acc_q;
+assign		o_bx				    =		b_q;
+assign		o_sp				    =		sp_q;
+assign		o_dpl				    =		dpl_q;
+assign		o_dph				    =		dph_q;
+assign		o_sx_0				    =		sx_0_q;
+assign		o_sx_1				    =		sx_1_q;
+assign      o_s1_done_tick          =       s1_done_tick;
+assign      o_s2_done_tick          =       s2_done_tick;
+assign      o_s3_done_tick          =       s3_done_tick;
+assign      o_peri_sfr_req          =       peri_sfr_req_q  |   peri_sfr_req_d;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+assign      o_cpu_dbg_boot_ack_n    =   cpu_dbg_boot_ack_n;
+assign      o_cpu_dbg_brkHit_n      =   cpu_dbg_brkHit_n;
+
+assign      o_cpu_err_halt          =   cpu_err_halt_q;
+assign      o_cpu_err_code          =   cpu_err_code_q;
+
+assign      o_cpu_dbg_halt          =   cpu_dbg_halt_q;
+assign      o_cpu_dbgBoot_ack_n     =   cpu_dbg_boot_ack_n;
+
+assign      o_cpu_haltReq_n         =   ~ (cpu_dbg_halt_q | cpu_err_halt_q);
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 endmodule

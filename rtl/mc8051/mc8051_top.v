@@ -232,7 +232,20 @@ mc51_cu					u_mc51_cu(
 	.i_int_req_n							(int_req_n						),
 	.o_int_ack_n							(int_ack_n						),
 	.i_int_so_num							(int_so_num						),
-	.o_int_reti								(int_reti						)
+	.o_int_reti								(int_reti						),
+
+    .o_cpu_err_halt                         (/*o_cpu_err_halt*/              ),
+    .o_cpu_err_code                         (/*o_cpu_err_code*/              ),
+    .o_cpu_haltReq_n                        (/*o_cpu_haltReq_n*/             ),
+    .o_cpu_dbg_halt                         (/*o_cpu_dbg_halt*/              ),
+    .o_cpu_dbg_brkHit_n                     (/*o_cpu_dbg_brkHit_n*/          ),
+    .o_cpu_dbgBoot_ack_n                    (/*o_cpu_dbgBoot_ack_n*/         ),
+
+    .i_cpu_dbg_mode                         (`DBG_RUN_MODE                    ),
+    .i_cpu_dbg_tick                         (1'b0                             ),
+    .i_cpu_dbg_brkPC                        (16'h0000                         ),
+    .i_cpu_dbgBoot_req_n                    (1'b1                             ),
+    .i_cpu_dbgBoot_entPoint                 (4'h0                             )        
 );
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 

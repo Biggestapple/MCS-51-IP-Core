@@ -70,7 +70,7 @@
 //Stack Operation instruction
 `define					POP					8'hD0
 `define					PUSH				8'hC0
-//subroutine Operation instructio
+//subroutine Operation instruction
 `define					RET					8'h22
 `define					RETI				8'h32
 `define					RL_A				8'h23
@@ -257,6 +257,8 @@
 	
 //Interrupt Enter Point Address 
 `define					INT_VTAB_SADDR		8'h00
+//DBG Boot Enter Point Address
+`define                 DBG_VTAB_SADDR		8'hF0
 
 //Define the alu op code
 `define					ALU_ARI_ADD			5'h00
@@ -382,3 +384,14 @@
 `define					S5_WR_PCL			4'h7
 `define					S5_WR_PCH			4'h8
 `define					S5_WR_SPM0			4'h9
+
+//Define the DBG Mode Macro
+`define					DBG_RUN_MODE        3'h0
+`define					DBG_RESET_MODE      3'h1
+`define					DBG_STEP_MODE       3'h2
+`define					DBG_BREAK_MODE      3'h3
+`define                 DBG_HALT_MODE       3'h4
+
+//Define the Error Code Table
+`define                 NONE_ERROR_BASE     8'h70
+`define                 HALT_ERROR_BASE     8'h80 
