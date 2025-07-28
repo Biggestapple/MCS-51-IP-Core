@@ -116,14 +116,28 @@ always @(posedge clk or negedge reset_n)
 		alu_o1_temp_q		<=	alu_o1_temp_d;
 	end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-							//Internal wire here
+							//Internal wire Defination
+/* 
+    reg				[3:0]	alu_o_l;
+    reg						alu_cy_l_w;
+    reg				[2:0]	alu_o_c6;
+
+    reg						alu_cy_c6_w;
+    reg						alu_o_c7;
+    reg						alu_da_cy_w;
+*/
 wire			[7:0]	alu_in1_ctemp	=	(~alu_in1_temp) +	1;
-reg				[3:0]	alu_o_l;
-reg						alu_cy_l_w;
-reg				[2:0]	alu_o_c6;
-reg						alu_cy_c6_w;
-reg						alu_o_c7;
-reg						alu_da_cy_w;
+reg             [7:0]   alu_in1_atemp;
+                                //  Transfer to ==> -in1_temp
+reg             [3:0]   alu_add_lbit;
+reg             [2:0]   alu_add_hbit;
+reg                     alu_add_bit7;
+
+reg                     alu_add_b3cy_w;
+reg                     alu_add_b6cy_w;
+reg                     alu_add_b7cy_w;
+reg                     alu_da_cy_w;
+
 `ifdef	ALU_INCLUDE_MUL
 	reg						alu_mul_req;
 	reg						alu_mul_rdy;
@@ -274,12 +288,15 @@ always @(*) begin
 	
 	pr_d			=	^alu_in0_temp;
 	
-	alu_o_l			=	'b0;
-	alu_cy_l_w		=	'b0;
-	alu_o_c6		=	'b0;
-	alu_cy_c6_w		=	'b0;
-	alu_o_c7		=	'b0;
+	alu_add_lbit    =	'b0;
+	alu_add_b3cy_w  =	'b0;
+	alu_add_hbit    =	'b0;
+	alu_add_b6cy_w  =	'b0;
+	alu_add_bit7    =	'b0;
+    alu_add_b7cy_w  =   'b0;
+
 	alu_da_cy_w		=	'b0;
+    alu_in1_atemp   =   'b0;
 	
 `ifdef	ALU_INCLUDE_MUL
 	alu_mul_req		=	'b0;
@@ -292,16 +309,27 @@ always @(*) begin
 		case(alu_mode)
 			`ALU_ARI_ADD,	`ALU_ARI_ADDC,	`ALU_ARI_SUBB:
 				begin
-							//Stupid Stuff Here
-					{alu_cy_l_w,alu_o_l		} 	=	alu_in0_temp[3:0] 		+	((alu_mode	==	`ALU_ARI_SUBB)	?	alu_in1_ctemp[3:0]:alu_in1_temp[3:0]) 	+((alu_mode	==	`ALU_ARI_ADDC)	?	cy_c:1'b0);
-					{alu_cy_c6_w,alu_o_c6	} 	=	alu_in0_temp[6:4] 		+	((alu_mode	==	`ALU_ARI_SUBB)	?	alu_in1_ctemp[6:4]:alu_in1_temp[6:4]) 	+alu_cy_l_w;
-					{cy_d,alu_o_c7			} 	=	alu_in0_temp[7] 		+	((alu_mode	==	`ALU_ARI_SUBB)	?	alu_in1_ctemp[7]:alu_in1_temp[7]) 		+alu_cy_c6_w;
-					alu_o0_temp_d				=	{alu_o_c7,alu_o_c6,alu_o_l};
-					
-					ac_d						=	alu_cy_l_w;
-					ov_d						=	cy_d	^ alu_cy_c6_w;
-					calc_done_d					=	1'b1;
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+							//Stupid Stuff Here  ... The subb operation is : result => Atemp = In_0 - In_1 - C_flag
+                            //A bit tricky here, but it works
+                    alu_in1_atemp                       =	(alu_mode	==	`ALU_ARI_SUBB) ? alu_in1_ctemp : alu_in1_temp;
+
+                    {alu_add_b3cy_w, alu_add_lbit   }	=	alu_in0_temp[3:0]   + ( (alu_mode	==	`ALU_ARI_ADDC)	?	cy_c:1'b0 ) + alu_in1_atemp[3:0]    + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{4{cy_q}}:4'b0  );
+                    {alu_add_b6cy_w, alu_add_hbit   }	=	alu_in0_temp[6:4]   + alu_in1_atemp[6:4] + alu_add_b3cy_w                                       + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{3{cy_q}}:3'b0  );
+                    {alu_add_b7cy_w, alu_add_bit7   }   =	alu_in0_temp[7]     + alu_in1_atemp[7] + alu_add_b6cy_w                                         + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{1{cy_q}}:1'b0  );
+					calc_done_d					        =	1'b1;
+
+                    if(alu_mode    ==   `ALU_ARI_SUBB) begin
+                        cy_d                            =   ~alu_add_b7cy_w;
+                        ac_d                            =   ~alu_add_b3cy_w;
+                        ov_d                            =   cy_d ^ (~alu_add_b7cy_w );
+                    end else begin
+                        cy_d                            =   alu_add_b7cy_w;
+                        ac_d                            =   alu_add_b3cy_w;
+                        ov_d                            =   cy_d ^ ( alu_add_b6cy_w );
+                    end
 				end
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 			`ALU_ARI_RR:
 				begin
 					alu_o0_temp_d				=	{alu_in0_temp[0]		,alu_in0_temp[7:1]};
