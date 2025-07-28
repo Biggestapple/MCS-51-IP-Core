@@ -157,7 +157,7 @@
 `define					DA_A				8'hD4
 
 `define					DJNZ_RN				8'b1101_1zzz
-`define					DJNE_DIR			8'hD5
+`define					DJNZ_DIR			8'hD5
 
 `define					INC_DPTR			8'hA3
 `define					JB					8'h20
@@ -339,6 +339,7 @@
 `define					ALU_I1_P1			3'h3
 `define					ALU_I1_N1			3'h4
 `define					ALU_I1_NU			3'h5
+`define                 ALU_I1_DPH          3'h6
 //Define the s2_mem_addr_sel
 `define                 S2_ADDR_RS0         4'h0
 `define					S2_ADDR_RS1 		4'h1
