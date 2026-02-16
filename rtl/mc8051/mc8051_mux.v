@@ -10,6 +10,7 @@
 //			Biggest_apple				2024.9.3		Create the file
 //			Biggest_apple				2024.11.27		Rebuild All
 //          Biggest_apple               2024.12.08      Fixed architecture bugs on xx_F_@Rn_xx instructions
+//          Biggest_apple               2026.02.10      Fixed SFR bit addressing bugs -- BITM0_addr
 //-----------------------------------------------------------------------------------------------------------
 `timescale 				1ns/1ps
 `include				"global_param.v"
@@ -47,7 +48,9 @@ module	mc8051_mux(
 );
 wire		[7:0]			r0_w;
 assign						r0_w			=	{11'b0,i_psw[4:3],3'b0          };
-wire        [15:0]          BITM0_offset    =   {10'b0,~i_s2_data_buffer[7],5'b0};     
+wire        [15:0]          BITM0_offset    =   {10'b0,~i_s2_data_buffer[7],5'b0};   
+wire        [15:0]          BITM0_addr      =   (i_s2_data_buffer[7] == 1'b1    ) ? {i_s2_data_buffer[7:4],4'b0000}
+                                                : i_s2_data_buffer[7:3]+ BITM0_offset;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 assign		o_alu_in0		=	(i_alu_in0_sel			== 	`ALU_I0_ACC		)	?		i_acc									    :
 								(i_alu_in0_sel			==	`ALU_I0_S2B		)	?		i_s2_data_buffer						    :
@@ -65,6 +68,7 @@ assign		o_alu_in1		=	(i_alu_in1_sel			==	`ALU_I1_S2B	    )	?		i_s2_data_buffer	 
 								(i_alu_in1_sel			==	`ALU_I1_P1		) 	?		8'h01				                        :
 								(i_alu_in1_sel			==	`ALU_I1_N1		) 	?		8'hff				                        :
 								(i_alu_in1_sel			==	`ALU_I1_NU		) 	?		8'h00				                        :		
+                                (i_alu_in1_sel          ==  `ALU_I1_DPH     )   ?       i_dph                                       :
                                 8'bzzzz_zzzz;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w	+	i_s1_instr_buffer[2:0]}		    :
@@ -80,7 +84,7 @@ assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w
                                 (i_s2_mem_addr_sel      ==  `S2_ADDR_DPTRPA )   ?   {i_dph,i_dpl}       +   i_acc                   :					
                             //MOV A,@A+PC
 								(i_s2_mem_addr_sel		==	`S2_ADDR_PCPA	)	?	{i_pch,i_pcl}	+	i_acc					    :
-								(i_s2_mem_addr_sel		==	`S2_ADDR_BITM0	)	?	i_s2_data_buffer[7:3]+ BITM0_offset             :
+								(i_s2_mem_addr_sel		==	`S2_ADDR_BITM0	)	?	BITM0_addr                                      :
 							//For normal bit operation
 								(i_s2_mem_addr_sel      ==  `S2_ADDR_BITM1  )   ?   {8'b0,i_s2_data_buffer[7:3],3'b000	}           :
                                 8'bzzzz_zzzz;
@@ -88,7 +92,7 @@ assign		o_s2_mem_addr_d	=	(i_s2_mem_addr_sel  	==	`S2_ADDR_RS0    )	?	{8'b0,r0_w
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 assign		o_s3_mem_addr_d	=	(i_s3_mem_addr_sel      ==	`S3_ADDR_RS1    )	?	{8'b0,		r0_w	+	i_s1_instr_buffer[0]}	:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_INDX8	)	?	{8'b0,i_s2_data_buffer}							:
-								(i_s3_mem_addr_sel		==	`S3_ADDR_BITM0	)	?	i_s2_data_buffer[7:3]+ BITM0_offset             :
+								(i_s3_mem_addr_sel		==	`S3_ADDR_BITM0	)	?	BITM0_addr                                      :
 //								(i_s3_mem_addr_sel		==	`S3_ADDR_BITM1	)	?	{8'b0,i_s2_data_buffer[7:3],3'b000}				:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_SINDX8	)	?	{8'b0,i_s3_data_buffer}							:
 								(i_s3_mem_addr_sel		==	`S3_ADDR_PC		)	?	{i_pch,i_pcl}								    :
@@ -103,7 +107,7 @@ assign		o_s5_mem_addr_d	=	(i_s5_mem_addr_sel		==	`S5_ADDR_RS0    )	?	{8'b0,r0_w	
 								(i_s5_mem_addr_sel		==	`S5_ADDR_SINDX8	)	?	{8'b0,i_s3_data_buffer}							:			
 								(i_s5_mem_addr_sel		==	`S5_ADDR_INDX16	)	?	{i_s3_data_buffer,i_s2_data_buffer}				:
 							//For push or pop
-								(i_s5_mem_addr_sel		==	`S5_ADDR_BITM0	)	?	i_s2_data_buffer[7:3]+ BITM0_offset             :
+								(i_s5_mem_addr_sel		==	`S5_ADDR_BITM0	)	?	BITM0_addr                                      :
 //								(i_s5_mem_addr_sel		==	`S5_ADDR_BITM1	)	?	{8'b0,i_s2_data_buffer[7:3],3'b000}				:
 							//For bit operation
 								(i_s5_mem_addr_sel		==	`S5_ADDR_SX		)	?	{8'b0,	i_sx_0		}							:
