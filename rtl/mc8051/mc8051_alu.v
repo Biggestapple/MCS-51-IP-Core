@@ -11,6 +11,9 @@
 //			Biggest_apple				2024.11.20		Almost rebuild all
 //			Biggest_apple				2024.11.24		Continuing ... ...
 //			Biggest_apple				2024.11.27		Finished
+//          Biggest_apple               2026.02.07      Simulated the total rtl project 
+//          Biggest_apple               2026.02.12      Fixed "SUBB" flg_bit bugs & timing competition bugs
+//          Biggest_apple               2026.02.15      Fixed flag_update logic bugs (cy_q is mixed up with cy_c)  
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 `timescale 				1ns/1ps
 `include				"global_param.v"
@@ -39,8 +42,8 @@ module mc8051_alu(
 	output					o_alu_ready,
 	output					o_jp_active
 );
-wire			alu_active_d0	=	i_t_p_d == `S4_0    &&  (i_alu_mode != `ALU_RLATCH);
-reg				alu_active_d1;
+wire			alu_active_d0	=	i_t_p_d == `S4_0;
+reg				alu_active_d1, alu_active_d2;
 reg				[4:0]		alu_mode;
 reg				[7:0]		alu_in0_temp,alu_in1_temp,alu_bin0_temp,alu_bin1_temp;
 reg             alu_ready_d0,alu_ready_d1;
@@ -48,11 +51,12 @@ wire            alu_ready       =   alu_ready_d1;
 reg				[7:0]       psw_temp;
 reg				alu_bfet_bit_q;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-							//Interesting gramma ... ...
+							//The latch circuit is used to stabilize the logic
 							//Arithmetic operation circuit Current version :2.0.1
 always @(posedge clk or negedge reset_n)
-	if(~reset_n)			alu_active_d1	<=	1'b0;
-	else					alu_active_d1	<=	alu_active_d0;
+	if(~reset_n)			{alu_active_d2, alu_active_d1}	<=	2'b00;
+	else					{alu_active_d2, alu_active_d1}	<=	{alu_active_d1,alu_active_d0};
+                            // Double delay makes the data correct input
 always @(posedge clk or negedge reset_n)
 	if(~reset_n)			alu_mode		<=	`ALU_IDLE_0;
 	else if(alu_active_d0)	alu_mode		<=	i_alu_mode;
@@ -126,7 +130,7 @@ always @(posedge clk or negedge reset_n)
     reg						alu_o_c7;
     reg						alu_da_cy_w;
 */
-wire			[7:0]	alu_in1_ctemp	=	(~alu_in1_temp) +	1;
+wire			[7:0]	alu_in1_ctemp	=	~alu_in1_temp;
 reg             [7:0]   alu_in1_atemp;
                                 //  Transfer to ==> -in1_temp
 reg             [3:0]   alu_add_lbit;
@@ -214,7 +218,7 @@ reg                     alu_da_cy_w;
 	reg						alu_div_req_d0,	alu_div_req_d1;
 	reg			[7:0]		alu_div_temp0;
 	reg			[7:0]		alu_div_temp1;
-	reg			[8:0]		alu_div_temp2;
+	reg			[7:0]		alu_div_temp2;
 	
 	always @(posedge clk or negedge reset_n)
 		if(~reset_n)
@@ -228,7 +232,7 @@ reg                     alu_da_cy_w;
 		if(~reset_n) begin
 			alu_div_temp0		<=	8'h00;
 			alu_div_temp1		<=	8'h00;
-			alu_div_temp2		<=	9'h0_00;
+			alu_div_temp2		<=	8'h00;
 			
 			alu_div_ov			<=	1'b0;
 			alu_div_rdy			<=	1'b0;
@@ -254,7 +258,11 @@ reg                     alu_da_cy_w;
 						alu_div_ov			<=	1'b1;
 					end else begin
 						if(alu_div_temp2	>=	alu_in1_temp) begin
-							alu_div_temp2	<=	alu_div_temp2	+	{1'b1,alu_in1_ctemp};
+							alu_div_temp2	<=	alu_div_temp2	+ alu_in1_ctemp + 1;
+                            /* Simple division algorithm : 
+                                1. Omitted Some bugs still exist in this module
+                                2. The most tricky part is how to handle the negative situation (But 8051 only handles unsigned division, so it's not a big deal)
+                            */
 							alu_div_temp0	<=	alu_div_temp0 	+ 	1'b1;
 						end else begin
 							alu_div_temp1	<=	alu_div_temp2;
@@ -305,7 +313,7 @@ always @(*) begin
 	alu_div_req		=	'b0;
 `endif
 	
-	if(alu_active_d1)
+	if(alu_active_d2)
 		case(alu_mode)
 			`ALU_ARI_ADD,	`ALU_ARI_ADDC,	`ALU_ARI_SUBB:
 				begin
@@ -314,15 +322,17 @@ always @(*) begin
                             //A bit tricky here, but it works
                     alu_in1_atemp                       =	(alu_mode	==	`ALU_ARI_SUBB) ? alu_in1_ctemp : alu_in1_temp;
 
-                    {alu_add_b3cy_w, alu_add_lbit   }	=	alu_in0_temp[3:0]   + ( (alu_mode	==	`ALU_ARI_ADDC)	?	cy_c:1'b0 ) + alu_in1_atemp[3:0]    + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{4{cy_q}}:4'b0  );
-                    {alu_add_b6cy_w, alu_add_hbit   }	=	alu_in0_temp[6:4]   + alu_in1_atemp[6:4] + alu_add_b3cy_w                                       + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{3{cy_q}}:3'b0  );
-                    {alu_add_b7cy_w, alu_add_bit7   }   =	alu_in0_temp[7]     + alu_in1_atemp[7] + alu_add_b6cy_w                                         + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{1{cy_q}}:1'b0  );
+                    {alu_add_b3cy_w, alu_add_lbit   }	=	alu_in0_temp[3:0]   + ( (alu_mode	==	`ALU_ARI_ADDC)	?	cy_c:1'b0 ) + alu_in1_atemp[3:0]    + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{4{cy_c}}+ 1:4'b0  );
+                    {alu_add_b6cy_w, alu_add_hbit   }	=	alu_in0_temp[6:4]   + alu_in1_atemp[6:4] + alu_add_b3cy_w                                       + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{3{cy_c}}   :3'b0  );
+                    {alu_add_b7cy_w, alu_add_bit7   }   =	alu_in0_temp[7]     + alu_in1_atemp[7] + alu_add_b6cy_w                                         + ((alu_mode    ==	`ALU_ARI_SUBB)	?	{1{cy_c}}   :1'b0  );
 					calc_done_d					        =	1'b1;
+					
+					alu_o0_temp_d						=	{alu_add_bit7,	alu_add_hbit,	alu_add_lbit};
 
                     if(alu_mode    ==   `ALU_ARI_SUBB) begin
                         cy_d                            =   ~alu_add_b7cy_w;
                         ac_d                            =   ~alu_add_b3cy_w;
-                        ov_d                            =   cy_d ^ (~alu_add_b7cy_w );
+                        ov_d                            =   cy_d ^ (~alu_add_b6cy_w );
                     end else begin
                         cy_d                            =   alu_add_b7cy_w;
                         ac_d                            =   alu_add_b3cy_w;
@@ -384,7 +394,7 @@ always @(*) begin
 				begin
 							//Note: There are several situations to determine the addition number
 					{alu_da_cy_w,alu_o0_temp_d}	=	alu_in0_temp	+	((alu_in0_temp[3:0]	>9 || ac_c	==1'b1) ? 8'h06:8'h00)	+	((alu_in0_temp[7:4]	>9 || cy_c	==1'b1) ? 8'h60:8'h00);
-					cy_d						=	(alu_da_cy_w	==	1'b1)	?	1'b1:	cy_q;
+					cy_d						=	(alu_da_cy_w	==	1'b1)	?	1'b1:	cy_c;
 					calc_done_d					=	1'b1;
 				end
             `ALU_ARI_XCHD:
@@ -513,7 +523,7 @@ always @(*) begin
 					{alu_o1_temp_d,alu_o0_temp_d}	=	{alu_in1_temp,alu_in0_temp}		+	1'b1;	
 				end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-			`ALU_IDLE_0:
+			`ALU_IDLE_0, `ALU_RLATCH:
 					calc_done_d			=	1'b1;
 			default:
 				$display ("%m :at time %t Error: Fetched INVALID ALU_MODE in alu_module.", $time);
