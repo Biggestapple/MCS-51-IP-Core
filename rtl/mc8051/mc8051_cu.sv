@@ -18,10 +18,13 @@
 //			Biggest_apple				2024.10.5		Rebuild All
 //			Biggest_apple				2024.11.17		Nothing to say ... ... 
 //			Biggest_apple				2024.11.18		Completed the J_Group instruction and interrupt function
-//			Biggest_apple				2024.11.19		All Done Great !
+//			Biggest_apple				2024.11.19		All Done Great ! Maybe ...
 //			Biggest_apple				2024.11.21		Bit Addressing still has problems (No problem actually )
 //          Biggest_apple               2024.12.24      Added peripheral sfr control logic
 //          Biggest_apple               2025.7.25       Added the debugger interface (test only)     
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+//          Biggest_apple               2026.02.07      Built the C_Model of the whole project for further verification
+//          Biggest_apple               2026.02.07      Completed the DEBUG logic 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 `timescale 				1ns/1ps
 `include				"global_param.v"
@@ -142,6 +145,7 @@ module	mc51_cu(
 
     input       [15:0]      i_cpu_dbg_brkPC,
     output                  o_cpu_dbg_brkHit_n,
+    
 /*
     input                   i_cpu_dbg_memRd_n,
     input                   i_cpu_dbg_memWr_n,
@@ -233,6 +237,7 @@ reg                 cpu_dbg_brkHit_n;
 reg     [3:0]       cpu_dbg_boot_entPoint;
 reg                 cpu_dbg_boot_ack_n;
 reg                 cpu_dbg_boot_req_n;
+reg                 cpu_dbg_t0_halt;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 always @(posedge clk or negedge reset_n)
     if(~reset_n) begin
@@ -276,6 +281,7 @@ always_comb begin : CPU_ERR_PROC_LOGIC
     if(t_p_d == `S8_HALT_LOOP) begin
         cpu_err_halt_d  =   1'b1;
         cpu_err_code_d  =   `HALT_ERROR_BASE + t_p_q;
+                            //Lock the timing phase when the internal error occurs 
     end
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -292,7 +298,7 @@ always @(posedge clk or negedge reset_n)
 	else
 		int_so_num						<=		i_int_so_num;
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
-							//Just SDRAM type
+							//The normal Low128 byte RAM write back logic
 reg					is_s5_wr_iram;
 reg					is_s5_wr_sfr;
 always @(posedge clk)
@@ -300,6 +306,13 @@ always @(posedge clk)
 		iram[s5_addr_truncat]			<=		i_mem_wdata;
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
+/*
+    The tricky staff happens here is that the SFR space addressing is mixed with 
+    the normal RAM addressing, which means we need to build a new data path called "sfr_rd_temp" etc.
+
+    In modern processor architecture, the SFR space loactes inside the cpu belonging to the Universal 
+    Registers Group which is totally independent of the external RAM space. Such problem does not exist at all .
+*/
 reg		[7:0]		sfr_rd_temp;
 reg					is_s2_fetch_sfr;
 reg					is_s3_fetch_sfr;
@@ -466,6 +479,7 @@ always_comb begin : MAIN_CU_FSM_LOGIC
 */
     cpu_dbg_halt_d      =   cpu_dbg_halt_q;
     cpu_dbg_boot_ack_n  =   1'b1;
+    cpu_dbg_t0_halt     =   1'b0;
 
 	case(t_p_q)
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -491,42 +505,36 @@ always_comb begin : MAIN_CU_FSM_LOGIC
                     begin
                         cpu_dbg_halt_d          =   1'b1;
                         t_p_d                   =   `S1_0;
-                            // Just the cpu halted here and we can only 
-                            // access to the iram/exram/register in this mode but how to do this ???
-                            // We can inject the mov-secp instruction /// Just LCALL jump to the DBG program that's genius
+/* 
+    Actually, when the timing-phase enters S1_0 means that the previous instruction has been
+    executed completely which means that's safe to halt the cpu in this stage. Meanwhile, the instruction itself
+    hasn't been loaded, the PC points to the next instruction.
+*/
                         if(~cpu_dbg_boot_req_n ) begin
                             cpu_dbg_boot_ack_n  =   1'b0;
-                            //Load the "LCALL" Instruction
+                            // Load the "LCALL" Instruction
 					        s1_instr_buffer_d	=	`LCALL;
 					        s2_data_buffer_d	=	8'h00;
 					        s3_data_buffer_d	=	cpu_dbg_boot_entPoint + `DBG_VTAB_SADDR;
 					
-							//Jump to S4_0 stage
+							// Jump to S4_0 stage in the following code
 					        t_p_d				=	`S4_0;
                         end 
                     end
-                `DBG_STEP_MODE:
+                `DBG_STEP_MODE, `DBG_BREAK_MODE:
+                            // Well Only in DBG_HALT_MODE, we can modify the PC_register
+                            // `DBG_STEP_MODE, `DBG_BREAK_MODE is used to monitor the register value
                     begin
-                        cpu_dbg_halt_d          =   1'b1;
-                        t_p_d		            =	`S1_0;
-                        if(cpu_dbg_tick) begin
-                            s1_rd_instr_buffer(i_mem_rdata, t_p_d, rd_n, psen_n, s1_instr_buffer_d);
-                            cpu_dbg_halt_d      =   1'b0;
-                            $display ("%m :at time %t DBG: Halt has been steped out.", $time);
-                        end
-                    end
-                `DBG_BREAK_MODE:
-                    begin
-                            // Todo: Implement the break dbg mode
-                            // If hit the break point, then halt the cpu ... 
-                        if(~cpu_dbg_brkHit_n & ~cpu_dbg_tick) begin
+                        cpu_dbg_t0_halt         =   (cpu_dbg_mode == `DBG_STEP_MODE)    ?   ~cpu_dbg_tick                       :
+                                                    (cpu_dbg_mode == `DBG_BREAK_MODE)   ?   ~cpu_dbg_brkHit_n & ~cpu_dbg_tick   :   1'b0;
+
+                        if(cpu_dbg_t0_halt) begin
                             cpu_dbg_halt_d      =   1'b1;
-                            t_p_d               =	`S1_0;
-                            $display ("%m :at time %t DBG: Halt has been ENTERED at point %h.", $time , cpu_dbg_brkPC);
+                            t_p_d               =   `S1_0;
+                            $display ("%m :at time %t DBG: CPU halted due to userBreak or pcBreak.", $time);
                         end else begin
-                            cpu_dbg_halt_d      =   1'b0;
-                            $display ("%m :at time %t DBG: Halt has been steped out.", $time);
                             s1_rd_instr_buffer(i_mem_rdata, t_p_d, rd_n, psen_n, s1_instr_buffer_d);
+                            cpu_dbg_halt_d      =   1'b0;
                         end
                     end
                 default:
@@ -574,7 +582,7 @@ always_comb begin : MAIN_CU_FSM_LOGIC
 								if(s2_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
 							//Access to SFR_SPACE or Unexist space
 									if(i_s2_fetch_mode_sel	==	`IND_IRAM_MODE	) begin
-										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
+										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module at S2 phase. (Not supporting in 8051 system)", $time);
                                         t_p_d                   =   `S8_HALT_LOOP;
                                     end else begin
                                         is_s2_fetch_sfr		=	1'b1;
@@ -639,7 +647,7 @@ always_comb begin : MAIN_CU_FSM_LOGIC
 								if(s3_addr_truncat	>=	`IRAM_UPPER_BASE	) begin
 							//Access to SFR_SPACE or Unexist space
 									if(i_s3_fetch_mode_sel	==	`IND_IRAM_MODE	) begin
-										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module. (Not supporting in 8051 system)", $time);
+										$display ("%m :at time %t Error: Fetched INVALID ADDR in cu_module at S3 phase. (Not supporting in 8051 system)", $time);
                                         t_p_d	                =	`S4_0;
                                     end else begin
                                         is_s3_fetch_sfr		=	1'b1;
@@ -796,7 +804,8 @@ always @(*) begin
 				`PC_RXF_RELOAD		:		{pch_d,pcl_d}	=	{pch_d,pcl_d}	+	{{8{s3_data_buffer_q[7]}},s3_data_buffer_q};
 							//Won't use alu module for simplicity
 				`PC_IND_RELOAD		:		{pch_d,pcl_d}	=	{8'b0,acc_q	}	+	{dph_q,	dpl_q};
-				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s3_data_buffer_q,	s2_data_buffer_q};
+				`PC_16B_RELOAD		:		{pch_d,pcl_d}	=	{s2_data_buffer_q,	s3_data_buffer_q};
+                            //Addr15-8 --> S2 Buffer <=> addr7-0 --> S3 Buffer
 							//For "LJMP" instruction	
 				`PC_16X_RELOAD		:		{pch_d,pcl_d}	=	{sx_0_q,s2_data_buffer_q};		
 				default:
@@ -807,9 +816,10 @@ always @(*) begin
 			{pch_d,pcl_d}	=	{pch_q,pcl_q};
 	end else
 		{pch_d,pcl_d}	=	{pch_q,pcl_q};
-	
-	if({pch_d,pcl_d}	>=	16'hff_f0)
-		$display ("%m :at time %t Warning PC register may hit the boundary causing unpredictable action.", $time);
+end
+always @(posedge clk) begin
+    if({pch_d,pcl_d}	>=	16'hff_f0)
+        $display ("%m :at time %t Warning PC register may hit the boundary causing unpredictable action.", $time);
 end
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------//
 							//The following circuit is about the register update
@@ -863,6 +873,7 @@ always @(posedge clk or negedge reset_n)
 				`SP		:		sp_q		<=		i_mem_wdata;
 				`DPL	:		dpl_q		<=		i_mem_wdata;
 				`DPH	:		dph_q		<=		i_mem_wdata;
+				`PSW	:		psw_q		<=		i_mem_wdata;
 			default: begin
 					$display ("%m :at time %t Warning invalid sfr_addr ! Data Ignored.", $time);
 				end
